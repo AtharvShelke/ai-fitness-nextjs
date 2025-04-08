@@ -2,6 +2,7 @@
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
+import Link from 'next/link';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -40,7 +41,7 @@ export default function RootLayout({
         </main>
 
         <footer className="w-full p-4 text-center text-sm text-muted-foreground border-t">
-          Made with 💪 + 🥗 by your friendly neighborhood dev
+          Made with 💪 + 🥗 by your friendly neighborhood dev <Link href={'https://atharv-portfolio-ivory.vercel.app'} target='_blank'>Atharv Shelke</Link>
         </footer>
       </body>
     </html>
