@@ -31,7 +31,9 @@ Return in a clear format with Workout and Diet sections.
     const text = await result.response.text();
 
     return NextResponse.json({ success: true, workoutPlan: text });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Something went wrong';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
+  
 }
