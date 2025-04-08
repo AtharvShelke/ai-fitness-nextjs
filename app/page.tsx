@@ -1,103 +1,88 @@
-import Image from "next/image";
+'use client';
+
+import { useState } from 'react';
+import axios from 'axios';
+import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card } from '@/components/ui/card';
+import ReactMarkdown from 'react-markdown';
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [formType, setFormType] = useState<'workout' | 'diet'>('workout');
+  const [input, setInput] = useState({
+    height: '',
+    weight: '',
+    gender: '',
+    age: '',
+    goal: '',
+    healthConditions: '',
+    workoutDaysPerWeek: '',
+    dietType: '',
+    allergies: '',
+    mealFrequency: '',
+    caloricPreference: '',
+    foodRestrictions: '',
+  });
+  const [output, setOutput] = useState('');
+  const [loading, setLoading] = useState(false);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+  const handleSubmit = async () => {
+    setLoading(true);
+    try {
+      const url = formType === 'workout' ? '/api/generate/workout' : '/api/generate/diet';
+      const { data } = await axios.post(url, input);
+      setOutput(data.workoutPlan || data.dietPlan);
+    } catch (error) {
+      console.error('Error:', error);
+      setOutput('Something went wrong.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <main className="max-w-4xl mx-auto py-10 px-4">
+      <h1 className="text-4xl font-bold mb-6 text-center">AI Fitness & Diet Generator</h1>
+
+      <Tabs defaultValue="workout" onValueChange={(val) => setFormType(val as 'workout' | 'diet')} className="mb-6">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="workout">Workout Plan</TabsTrigger>
+          <TabsTrigger value="diet">Diet Plan</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <Input placeholder="Height (cm)" onChange={(e) => setInput({ ...input, height: e.target.value })} />
+        <Input placeholder="Weight (kg)" onChange={(e) => setInput({ ...input, weight: e.target.value })} />
+        <Input placeholder="Gender" onChange={(e) => setInput({ ...input, gender: e.target.value })} />
+        <Input placeholder="Age" onChange={(e) => setInput({ ...input, age: e.target.value })} />
+        <Input placeholder="Goal" onChange={(e) => setInput({ ...input, goal: e.target.value })} />
+        <Input placeholder="Health Conditions" onChange={(e) => setInput({ ...input, healthConditions: e.target.value })} />
+        <Input placeholder="Diet Type" onChange={(e) => setInput({ ...input, dietType: e.target.value })} />
+        {formType === 'workout' && (
+          <Input placeholder="Workout Days per Week" onChange={(e) => setInput({ ...input, workoutDaysPerWeek: e.target.value })} />
+        )}
+        {formType === 'diet' && (
+          <>
+            <Input placeholder="Allergies" onChange={(e) => setInput({ ...input, allergies: e.target.value })} />
+            <Input placeholder="Food Restrictions" onChange={(e) => setInput({ ...input, foodRestrictions: e.target.value })} />
+            <Input placeholder="Meal Frequency" onChange={(e) => setInput({ ...input, mealFrequency: e.target.value })} />
+            <Input placeholder="Caloric Preference" onChange={(e) => setInput({ ...input, caloricPreference: e.target.value })} />
+          </>
+        )}
+      </div>
+
+      <Button onClick={handleSubmit} disabled={loading} className="w-full mb-6">
+        {loading ? 'Generating...' : 'Generate Plan'}
+      </Button>
+
+      {output && (
+        <Card className="prose prose-neutral dark:prose-invert max-w-none p-4 border shadow-md overflow-auto">
+          <ReactMarkdown>{output}</ReactMarkdown>
+        </Card>
+      )}
+    </main>
   );
 }
