@@ -13,7 +13,7 @@ export async function POST(req: Request) {
     const prompt = `
 You are a professional fitness and nutrition expert.
 
-Create a personalized workout and diet plan:
+Create a personalized workout plan:
 - Height: ${height} cm
 - Weight: ${weight} kg
 - Gender: ${gender}
@@ -23,7 +23,7 @@ Create a personalized workout and diet plan:
 - Workout Days per Week: ${workoutDaysPerWeek}
 - Diet Type: ${dietType}
 
-Return in a clear format with Workout and Diet sections.
+Return in a clear format with Workout section.
     `;
 
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
