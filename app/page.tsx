@@ -36,7 +36,8 @@ export default function Home() {
       setOutput(data.workoutPlan || data.dietPlan);
     } catch (error) {
       console.error('Error:', error);
-      setOutput('Something went wrong.');
+      setOutput('An error occurred. This may be due to the app being hosted on Vercel’s free (hobby) tier and using Gemini 1.5-Flash, which occasionally exceeds the 10-second execution limit, causing a timeout.');
+
     } finally {
       setLoading(false);
     }
@@ -45,7 +46,7 @@ export default function Home() {
   return (
     <main className="max-w-4xl mx-auto py-10 px-4">
       <h1 className="text-4xl font-bold mb-6 text-center">AI Fitness & Diet Generator</h1>
-
+    
       <Tabs defaultValue="workout" onValueChange={(val) => setFormType(val as 'workout' | 'diet')} className="mb-6">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="workout">Workout Plan</TabsTrigger>

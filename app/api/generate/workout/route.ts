@@ -26,7 +26,7 @@ Create a personalized workout plan:
 Return in a clear format with Workout section.
     `;
 
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     const result = await model.generateContent([prompt]);
     const text = await result.response.text();
 
