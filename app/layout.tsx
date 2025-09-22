@@ -30,18 +30,25 @@ export default function RootLayout({
   return (
     <html lang="en" className="scroll-smooth">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground min-h-screen flex flex-col`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground min-h-screen flex flex-col fitness-gradient`}
       >
-        <header className="w-full p-4 shadow-sm border-b bg-white dark:bg-black">
-          <h1 className="text-xl font-semibold text-center">AI Fitness & Diet Generator</h1>
+        <header className="w-full border-b bg-background/70 glass">
+          <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+            <Link href="/" className="text-lg font-semibold tracking-tight flex items-center gap-2">
+              <span className="inline-grid place-items-center size-8 rounded-md bg-primary/15 border border-primary/30">🏋️</span>
+              <span>AI Fitness</span>
+            </Link>
+          </div>
         </header>
 
-        <main className="flex-1 container mx-auto px-4 py-6">
+        <main className="flex-1 container mx-auto px-4 py-10">
           {children}
         </main>
 
-        <footer className="w-full p-4 text-center text-sm text-muted-foreground border-t">
-          Made with 💪 + 🥗 by your friendly neighborhood dev <Link href={'https://atharv-portfolio-ivory.vercel.app'} target='_blank'>Atharv Shelke</Link>
+        <footer className="w-full border-t bg-background/60">
+          <div className="container mx-auto px-4 py-6 text-center text-xs text-muted-foreground">
+            Built with Next.js and AI · <Link href={'https://atharv-portfolio-ivory.vercel.app'} target='_blank' className="underline-offset-4 hover:underline">Atharv Shelke</Link>
+          </div>
         </footer>
       </body>
     </html>
