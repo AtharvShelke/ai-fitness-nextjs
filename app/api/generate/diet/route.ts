@@ -131,7 +131,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
     const result = await model.generateContent([buildPrompt(body)]);
     const raw = await result.response.text();
 
