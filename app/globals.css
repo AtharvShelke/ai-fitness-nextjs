@@ -6,21 +6,8 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -33,119 +20,115 @@
   --color-secondary: var(--secondary);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-sm: 0px;
+  --radius-md: 2px;
+  --radius-lg: 4px;
 }
 
 :root {
-  --radius: 0.75rem;
-  /* Fitness theme (light): crisp white with energetic green and slate text */
-  --background: oklch(0.995 0 0);
-  --foreground: oklch(0.21 0.02 262);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.21 0.02 262);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.21 0.02 262);
-  /* Primary: neon green ~ tailwind emerald-500 */
-  --primary: oklch(0.75 0.17 146);
-  --primary-foreground: oklch(0.98 0.02 262);
-  --secondary: oklch(0.97 0.01 262);
-  --secondary-foreground: oklch(0.26 0.02 262);
-  --muted: oklch(0.97 0.01 262);
-  --muted-foreground: oklch(0.55 0.03 262);
-  --accent: oklch(0.97 0.02 200);
-  --accent-foreground: oklch(0.26 0.02 262);
-  --destructive: oklch(0.6 0.25 27);
-  --border: oklch(0.93 0.01 262);
-  --input: oklch(0.93 0.01 262);
-  --ring: var(--primary);
-  /* Charts updated to match theme */
-  --chart-1: oklch(0.7 0.2 146);
-  --chart-2: oklch(0.67 0.15 200);
-  --chart-3: oklch(0.5 0.08 262);
-  --chart-4: oklch(0.82 0.2 100);
-  --chart-5: oklch(0.78 0.2 70);
-  --sidebar: oklch(0.99 0 0);
-  --sidebar-foreground: oklch(0.21 0.02 262);
-  --sidebar-primary: var(--primary);
-  --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: oklch(0.98 0.01 262);
-  --sidebar-accent-foreground: oklch(0.26 0.02 262);
-  --sidebar-border: oklch(0.93 0.01 262);
-  --sidebar-ring: var(--primary);
-}
+  /* ─── OBSIDIAN Color System ─────────────────────────────── */
+  --bg:              #080809;
+  --bg-2:            #0E0E10;
+  --bg-3:            #141416;
+  --bg-4:            #1C1C1F;
 
-.dark {
-  --background: oklch(0.18 0.02 262);
-  --foreground: oklch(0.98 0.02 262);
-  --card: oklch(0.22 0.02 262);
-  --card-foreground: oklch(0.98 0.02 262);
-  --popover: oklch(0.22 0.02 262);
-  --popover-foreground: oklch(0.98 0.02 262);
-  /* Primary pops in dark */
-  --primary: oklch(0.78 0.2 146);
-  --primary-foreground: oklch(0.1 0.02 262);
-  --secondary: oklch(0.28 0.02 262);
-  --secondary-foreground: oklch(0.98 0.02 262);
-  --muted: oklch(0.28 0.02 262);
-  --muted-foreground: oklch(0.74 0.02 262);
-  --accent: oklch(0.28 0.04 200);
-  --accent-foreground: oklch(0.98 0.02 262);
-  --destructive: oklch(0.65 0.2 27);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: var(--primary);
-  --chart-1: oklch(0.62 0.22 146);
-  --chart-2: oklch(0.7 0.17 162);
-  --chart-3: oklch(0.78 0.2 70);
-  --chart-4: oklch(0.63 0.22 304);
-  --chart-5: oklch(0.66 0.22 16);
-  --sidebar: oklch(0.22 0.02 262);
-  --sidebar-foreground: oklch(0.98 0.02 262);
-  --sidebar-primary: var(--primary);
-  --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: oklch(0.28 0.02 262);
-  --sidebar-accent-foreground: oklch(0.98 0.02 262);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: var(--primary);
+  --ink:             #ECEAE6;
+  --ink-2:           #9B9899;
+  --ink-3:           #5A585C;
+  --ink-4:           #2E2D30;
+
+  /* Acid Lime — the one accent that earns its place */
+  --lime:            #C8F135;
+  --lime-dim:        rgba(200,241,53,0.12);
+  --lime-glow:       rgba(200,241,53,0.06);
+
+  --red:             #FF4040;
+  --amber:           #FFB830;
+
+  --border:          rgba(236,234,230,0.07);
+  --border-bright:   rgba(236,234,230,0.14);
+
+  /* Tailwind compat */
+  --background:      #080809;
+  --foreground:      #ECEAE6;
+  --card:            #0E0E10;
+  --card-foreground: #ECEAE6;
+  --popover:         #0E0E10;
+  --popover-foreground: #ECEAE6;
+  --primary:         #C8F135;
+  --primary-foreground: #080809;
+  --secondary:       #1C1C1F;
+  --secondary-foreground: #ECEAE6;
+  --muted:           #1C1C1F;
+  --muted-foreground:#5A585C;
+  --accent:          #C8F135;
+  --accent-foreground: #080809;
+  --destructive:     #FF4040;
+  --border:          rgba(236,234,230,0.07);
+  --input:           rgba(236,234,230,0.06);
+  --ring:            #C8F135;
+  --radius:          0rem;
 }
 
 @layer base {
-  * {
-    @apply border-border outline-ring/50;
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0; padding: 0;
+    @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    background: var(--bg);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
 @layer utilities {
-  /* Fitness gradient background: subtle radial + linear sheen */
-  .fitness-gradient {
-    background-image:
-      radial-gradient(1200px 600px at 80% -10%, color-mix(in oklch, var(--primary) 18%, transparent) 0%, transparent 60%),
-      radial-gradient(800px 400px at -10% 20%, color-mix(in oklch, var(--primary) 12%, transparent) 0%, transparent 60%),
-      linear-gradient(180deg, oklch(1 0 0) 0%, color-mix(in oklch, var(--primary) 6%, oklch(1 0 0)) 100%);
+  /* Film grain — premium texture */
+  .grain-overlay::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9998;
+    opacity: 0.032;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 256px 256px;
+    mix-blend-mode: overlay;
   }
 
-  /* Grid backdrop for fitness vibe */
-  .grid-bg {
-    background-image:
-      linear-gradient(to right, oklch(0 0 0 / .06) 1px, transparent 1px),
-      linear-gradient(to bottom, oklch(0 0 0 / .06) 1px, transparent 1px);
-    background-size: 24px 24px;
-    mask-image: radial-gradient(closest-side, #000 60%, transparent 100%);
+  /* Infinite marquee — seamless loop */
+  .marquee-wrap {
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 6%, #000 94%, transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0%, #000 6%, #000 94%, transparent 100%);
+  }
+  .marquee-inner {
+    display: flex;
+    flex-wrap: nowrap;
+    width: max-content;
+    will-change: transform;
+    animation: marquee-scroll 26s linear infinite;
+  }
+  .marquee-wrap:hover .marquee-inner { animation-play-state: paused; }
+  @keyframes marquee-scroll {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
   }
 
-  .glass {
-    backdrop-filter: saturate(1.4) blur(10px);
-    -webkit-backdrop-filter: saturate(1.4) blur(10px);
-    background: oklch(1 0 0 / 65%);
+  /* Scan line at top of sections */
+  .scan-line {
+    position: relative;
+  }
+  .scan-line::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, var(--lime) 40%, var(--lime) 60%, transparent 100%);
+    opacity: 0.35;
   }
 }
