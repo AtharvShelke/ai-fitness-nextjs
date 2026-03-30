@@ -1,5 +1,5 @@
 // app/layout.tsx
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Bebas_Neue, DM_Mono } from 'next/font/google';
 import './globals.css';
 import Link from 'next/link';
@@ -19,6 +19,13 @@ const dmMono = DM_Mono({
 export const metadata: Metadata = {
   title: 'OBSIDIAN — Elite Performance System',
   description: 'The fitness protocol built for those who train like athletes and live like executives.',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({
@@ -77,28 +84,6 @@ export default function RootLayout({
               </span>
             </Link>
 
-            {/* Center — scrolling status ticker */}
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              padding: '5px 14px',
-              border: '1px solid var(--border)',
-              borderRadius: 2,
-            }}>
-              <span style={{
-                width: 6, height: 6, borderRadius: '50%',
-                background: 'var(--lime)',
-                boxShadow: '0 0 8px var(--lime)',
-                flexShrink: 0,
-                animation: 'pulse-dot 2s ease-in-out infinite',
-              }} />
-              <span style={{
-                fontFamily: "'DM Mono', monospace",
-                fontSize: 10, letterSpacing: '0.14em',
-                color: 'var(--ink-2)', textTransform: 'uppercase',
-              }}>
-                AI ENGINE READY
-              </span>
-            </div>
 
             {/* Right */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -107,7 +92,7 @@ export default function RootLayout({
                 fontSize: 10, color: 'var(--ink-3)',
                 letterSpacing: '0.1em', textTransform: 'uppercase',
               }}>
-                v2.4.1
+                v0.0.1
               </span>
               <div style={{
                 width: 32, height: 32,
