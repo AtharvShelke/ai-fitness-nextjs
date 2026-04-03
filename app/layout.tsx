@@ -193,10 +193,59 @@ export default function RootLayout({
           </div>
         </footer>
 
+        {/* ── SYSTEM STATUS OVERLAY ────────────────────────────────────── */}
+        <div style={{
+          position: 'fixed',
+          bottom: 24,
+          right: 24,
+          background: 'rgba(8,8,9,0.88)',
+          backdropFilter: 'blur(20px) saturate(1.8)',
+          WebkitBackdropFilter: 'blur(20px) saturate(1.8)',
+          border: '1px solid var(--border)',
+          padding: '12px 18px',
+          borderRadius: 2,
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+        }}>
+          <div style={{
+            width: 6, height: 6, borderRadius: '50%',
+            background: '#ff4444',
+            boxShadow: '0 0 8px #ff4444',
+            animation: 'pulse-dot-red 2s infinite',
+          }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{
+              fontFamily: "'DM Mono', monospace",
+              fontSize: 10,
+              color: 'var(--ink-3)',
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+            }}>
+              System Alert
+            </span>
+            <span style={{
+              fontFamily: "'Barlow', sans-serif",
+              fontSize: 13,
+              color: 'var(--ink)',
+              fontWeight: 500,
+              letterSpacing: '0.02em',
+            }}>
+              LLM Currently Unavailable
+            </span>
+          </div>
+        </div>
+
         <style>{`
           @keyframes pulse-dot {
             0%, 100% { opacity: 1; box-shadow: 0 0 8px var(--lime); }
             50%       { opacity: 0.4; box-shadow: 0 0 3px var(--lime); }
+          }
+          @keyframes pulse-dot-red {
+            0%, 100% { opacity: 1; box-shadow: 0 0 8px #ff4444; background: #ff4444; }
+            50%       { opacity: 0.4; box-shadow: 0 0 2px #ff4444; background: rgba(255, 68, 68, 0.6); }
           }
         `}</style>
       </body>
