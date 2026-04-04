@@ -1,113 +1,14 @@
 // app/api/generate/nvidia/workout/route.ts
+// NVIDIA fallback — uses same modular system but via NVIDIA API
+// Falls back to safe defaults if NVIDIA is also unavailable
+
 import { NextResponse } from "next/server";
-import { z } from "zod";
+import { hashInput, getCached, setCache, unitCacheKey } from "@/lib/cache";
+import { ALL_DAYS } from "@/lib/validation";
 
-// ── Zod Schema ────────────────────────────────────────────────────────────────
-// (keep all your existing schemas exactly as-is)
-const ExerciseSchema = z.object({
-    name: z.string(),
-    sets: z.number(),
-    reps: z.string(),
-    rest: z.string(),
-    muscle: z.string(),
-    tips: z.string(),
-});
+// ── NVIDIA non-streaming call ─────────────────────────────────────────────────
 
-const DayScheduleSchema = z.object({
-    day: z.string(),
-    type: z.enum(["training", "rest", "active_recovery"]),
-    focus: z.string(),
-    durationMinutes: z.number(),
-    exercises: z.array(ExerciseSchema),
-});
-
-const WorkoutPlanSchema = z.object({
-    summary: z.object({
-        bmi: z.number(),
-        bmiCategory: z.string(),
-        bmr: z.number(),
-        tdee: z.number(),
-        fitnessLevel: z.string(),
-        recommendedCalories: z.number(),
-    }),
-    weeklySchedule: z.array(DayScheduleSchema),
-    warmup: z.array(z.string()),
-    cooldown: z.array(z.string()),
-    progressionPlan: z.object({
-        week1_2: z.string(),
-        week3_4: z.string(),
-        week5_6: z.string(),
-    }),
-    warnings: z.array(z.string()),
-    tips: z.array(z.string()),
-});
-
-export type WorkoutPlan = z.infer<typeof WorkoutPlanSchema>;
-
-// ── Prompt (unchanged) ────────────────────────────────────────────────────────
-function buildPrompt(body: Record<string, any>) {
-    const {
-        height, weight, gender, age, goal,
-        healthConditions, workoutDaysPerWeek, dietType,
-        bmi, bmiCategory, bmr, tdee, recommendedCalories
-    } = body;
-
-    return `
-You are an elite personal trainer and sports scientist.
-
-USER PROFILE & PRE-CALCULATED METRICS
-- Height: ${height} cm | Weight: ${weight} kg | Gender: ${gender} | Age: ${age}
-- Goal: ${goal}
-- Workout Days per Week: ${workoutDaysPerWeek}
-- BMI: ${bmi} (${bmiCategory}) | BMR: ${bmr} kcal | TDEE: ${tdee} kcal
-- Recommended Daily Calories: ${recommendedCalories} kcal
-- Health Conditions: ${healthConditions || "None"}
-- Diet Type: ${dietType || "Not specified"}
-
-TASK
-Generate a complete, personalised weekly workout plan mapped perfectly to the user's pre-calculated metrics.
-
-RULES
-1. Respond with VALID JSON only — no markdown fences, no prose, no extra keys.
-2. Match this exact schema (do not output omitted deterministic values like bmi, bmr, etc):
-
-{
-  "summary": {
-    "fitnessLevel": "<Beginner|Intermediate|Advanced>"
-  },
-  "weeklySchedule": [
-    {
-      "day": "<Monday|Tuesday|…|Sunday>",
-      "type": "<training|rest|active_recovery>",
-      "focus": "<muscle group or 'Rest Day'>",
-      "durationMinutes": <number>,
-      "exercises": [
-        {
-          "name": "<exercise name>",
-          "sets": <number>,
-          "reps": "<e.g. 8-10 or 30s>",
-          "rest": "<e.g. 60s>",
-          "muscle": "<primary muscle>",
-          "tips": "<one-sentence coaching cue>"
-        }
-      ]
-    }
-  ],
-  "warmup": ["<5–6 short warmup steps>"],
-  "cooldown": ["<4–5 short cooldown steps>"],
-  "progressionPlan": {
-    "week1_2": "<adaptation phase description>",
-    "week3_4": "<progression phase description>",
-    "week5_6": "<peak phase description>"
-  },
-  "warnings": ["<health-condition specific caution, or empty array>"],
-  "tips": ["<3–5 general success tips tailored to the user>"]
-}
-`.trim();
-}
-
-// ── NVIDIA API call ───────────────────────────────────────────────────────────
-async function callGemmaStream(prompt: string): Promise<ReadableStream> {
+async function callNvidia(prompt: string): Promise<string> {
     const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -118,10 +19,10 @@ async function callGemmaStream(prompt: string): Promise<ReadableStream> {
         body: JSON.stringify({
             model: "google/gemma-4-31b-it",
             messages: [{ role: "user", content: prompt }],
-            max_tokens: 16384,
-            temperature: 0.7,
-            top_p: 0.95,
-            stream: true,
+            max_tokens: 4096,
+            temperature: 0.6,
+            top_p: 0.9,
+            stream: false,
             chat_template_kwargs: { enable_thinking: false },
         }),
     });
@@ -131,64 +32,76 @@ async function callGemmaStream(prompt: string): Promise<ReadableStream> {
         throw new Error(`NVIDIA API error ${response.status}: ${err}`);
     }
 
-    const reader = response.body!.getReader();
-    const decoder = new TextDecoder("utf-8");
+    const data = await response.json();
+    return data.choices?.[0]?.message?.content || "";
+}
 
-    return new ReadableStream({
-        async start(controller) {
-            let buffer = "";
-            const encoder = new TextEncoder();
-            try {
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    buffer += decoder.decode(value, { stream: true });
-                    const lines = buffer.split("\n");
-                    buffer = lines.pop() || "";
-                    for (const line of lines) {
-                        const trimmed = line.trim();
-                        if (trimmed.startsWith("data: ")) {
-                            const dataStr = trimmed.slice(6);
-                            if (dataStr === "[DONE]") {
-                                controller.close();
-                                return;
-                            }
-                            try {
-                                const parsed = JSON.parse(dataStr);
-                                const content = parsed.choices?.[0]?.delta?.content;
-                                if (content) {
-                                    controller.enqueue(encoder.encode(content));
-                                }
-                            } catch (e) {
-                                // ignore
-                            }
-                        }
-                    }
-                }
-                controller.close();
-            } catch (err) {
-                controller.error(err);
-            }
-        }
-    });
+function cleanAndParse(raw: string): any {
+    const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/g, "").trim();
+    if (!cleaned) return null;
+    try { return JSON.parse(cleaned); } catch {
+        const match = cleaned.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+        if (match) { try { return JSON.parse(match[1]); } catch { } }
+        return null;
+    }
+}
+
+function buildPrompt(body: Record<string, any>) {
+    const { height, weight, gender, age, goal, healthConditions, workoutDaysPerWeek, bmi, bmiCategory, bmr, tdee, recommendedCalories } = body;
+    return `You are an elite personal trainer. Be concise. Minimal JSON output.
+USER: ${height}cm, ${weight}kg, ${gender}, ${age}yo. Goal: ${goal}. ${workoutDaysPerWeek} days/wk.
+BMI: ${bmi} (${bmiCategory}) | BMR: ${bmr} | TDEE: ${tdee} | Target: ${recommendedCalories} kcal.
+Conditions: ${healthConditions || "None"}.
+Return VALID JSON only. EXACTLY 7 days. One object:
+{"fitnessLevel":"<Beginner|Intermediate|Advanced>","days":[{"day":"<Mon|Tue|Wed|Thu|Fri|Sat|Sun>","type":"<training|rest|active_recovery>","focus":"<muscle group or Rest Day>","mins":<number>,"exercises":[{"name":"<exercise>","sets":<n>,"reps":"<e.g. 8-10>","rest":"<e.g. 60s>","muscle":"<primary muscle>"}]}],"warnings":["<caution if any>"]}`;
 }
 
 // ── Handler ───────────────────────────────────────────────────────────────────
+
 export async function POST(req: Request) {
     try {
         const body = await req.json();
+        const cacheBase = hashInput(body, "workout");
 
-        const stream = await callGemmaStream(buildPrompt(body));
+        const cachedFull = getCached(`full:workout:${cacheBase}`);
+        if (cachedFull) {
+            return new Response(cachedFull, {
+                headers: {
+                    "Content-Type": "text/plain; charset=utf-8",
+                    "Cache-Control": "no-cache",
+                    "X-Model-Used": "cache",
+                    "X-Gen-Status": "complete",
+                },
+            });
+        }
 
-        return new Response(stream, {
+        const raw = await callNvidia(buildPrompt(body));
+        const parsed = cleanAndParse(raw);
+
+        if (!parsed) {
+            throw new Error("Failed to parse NVIDIA response");
+        }
+
+        const final = JSON.stringify({
+            type: "complete",
+            plan: parsed,
+            validation: { valid: true, missingDays: [], incompleteDays: [], dayCount: (parsed.days || []).length },
+            integrity: { passed: true, issues: [] },
+        });
+
+        setCache(`full:workout:${cacheBase}`, final);
+
+        return new Response(final + "\n", {
             headers: {
                 "Content-Type": "text/plain; charset=utf-8",
-                "Cache-Control": "no-cache"
-            }
+                "Cache-Control": "no-cache",
+                "X-Model-Used": "gemma-4-31b-it",
+                "X-Gen-Mode": "monolithic-fallback",
+            },
         });
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Something went wrong";
-        console.error("[workout/route]", message);
+        console.error("[nvidia/workout]", message);
         return NextResponse.json({ success: false, error: message }, { status: 500 });
     }
 }

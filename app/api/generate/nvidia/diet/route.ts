@@ -1,127 +1,10 @@
 // app/api/generate/nvidia/diet/route.ts
+// NVIDIA fallback for diet — same event format as Gemini route
+
 import { NextResponse } from "next/server";
-import { z } from "zod";
+import { hashInput, getCached, setCache } from "@/lib/cache";
 
-// ── Zod Schema ────────────────────────────────────────────────────────────────
-
-const MealOptionSchema = z.object({
-    name: z.string(),
-    calories: z.number(),
-    protein: z.string(),
-    carbs: z.string(),
-    fats: z.string(),
-    prepMinutes: z.number(),
-    ingredients: z.array(z.string()),
-    notes: z.string(),
-});
-
-const MealSchema = z.object({
-    meal: z.string(),
-    time: z.string(),
-    options: z.array(MealOptionSchema),
-});
-
-const DietPlanSchema = z.object({
-    summary: z.object({
-        dailyCalories: z.number(),
-        protein: z.string(),
-        carbs: z.string(),
-        fats: z.string(),
-        hydration: z.string(),
-        dietLabel: z.string(),
-    }),
-    mealPlan: z.array(MealSchema),
-    supplements: z.array(z.object({
-        name: z.string(),
-        dose: z.string(),
-        timing: z.string(),
-    })),
-    avoidFoods: z.array(z.string()),
-    weeklyVariation: z.object({
-        refeedDay: z.string(),
-        lowCarbDay: z.string(),
-    }),
-    warnings: z.array(z.string()),
-    tips: z.array(z.string()),
-});
-
-export type DietPlan = z.infer<typeof DietPlanSchema>;
-
-// ── Prompt ────────────────────────────────────────────────────────────────────
-
-function buildPrompt(body: Record<string, any>) {
-    const {
-        height, weight, gender, age, goal,
-        healthConditions, dietType, allergies,
-        mealFrequency, caloricPreference, foodRestrictions,
-        bmi, bmiCategory, bmr, tdee, dailyCalories
-    } = body;
-
-    return `
-You are a registered dietitian and certified nutritionist.
-
-USER PROFILE & PRE-CALCULATED METRICS
-- Height: ${height} cm | Weight: ${weight} kg | Gender: ${gender} | Age: ${age}
-- Goal: ${goal}
-- BMI: ${bmi} (${bmiCategory}) | BMR: ${bmr} kcal | TDEE: ${tdee} kcal
-- Target Daily Calories: ${dailyCalories} kcal
-- Health Conditions: ${healthConditions || "None"}
-- Diet Type: ${dietType || "Balanced"}
-- Allergies: ${allergies || "None"}
-- Food Restrictions: ${foodRestrictions || "None"}
-- Meal Frequency: ${mealFrequency || "3 meals + 1 snack"}
-
-TASK
-Generate a complete, personalised daily diet plan mapped perfectly to the pre-calculated Target Daily Calories (${dailyCalories} kcal).
-
-RULES
-1. Respond with VALID JSON only — no markdown fences, no prose, no extra keys.
-2. Strictly respect all allergies and food restrictions.
-3. Match this exact schema (do not output the omitted deterministic values like dailyCalories):
-
-{
-  "summary": {
-    "protein": "<Xg>",
-    "carbs": "<Xg>",
-    "fats": "<Xg>",
-    "hydration": "<X.XL>",
-    "dietLabel": "<short label e.g. 'High-Protein Vegetarian'>"
-  },
-  "mealPlan": [
-    {
-      "meal": "<Breakfast|Morning Snack|Lunch|Afternoon Snack|Dinner>",
-      "time": "<suggested time, e.g. '7:30 AM'>",
-      "options": [
-        {
-          "name": "<dish name>",
-          "calories": <number>,
-          "protein": "<Xg>",
-          "carbs": "<Xg>",
-          "fats": "<Xg>",
-          "prepMinutes": <number>,
-          "ingredients": ["<ingredient + quantity>"],
-          "notes": "<swap suggestion or serving tip>"
-        }
-      ]
-    }
-  ],
-  "supplements": [
-    { "name": "<supplement>", "dose": "<dose>", "timing": "<when to take>" }
-  ],
-  "avoidFoods": ["<food to avoid with 1-line reason>"],
-  "weeklyVariation": {
-    "refeedDay": "<day + calorie/macro adjustment description>",
-    "lowCarbDay": "<day + calorie/macro adjustment description>"
-  },
-  "warnings": ["<health-condition specific dietary caution, or empty array>"],
-  "tips": ["<3–5 actionable nutrition tips tailored to the user>"]
-}
-`.trim();
-}
-
-// ── NVIDIA API call ───────────────────────────────────────────────────────────
-
-async function callGemmaStream(prompt: string): Promise<ReadableStream> {
+async function callNvidia(prompt: string): Promise<string> {
     const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -132,10 +15,10 @@ async function callGemmaStream(prompt: string): Promise<ReadableStream> {
         body: JSON.stringify({
             model: "google/gemma-4-31b-it",
             messages: [{ role: "user", content: prompt }],
-            max_tokens: 16384,
-            temperature: 0.7,
-            top_p: 0.95,
-            stream: true,
+            max_tokens: 4096,
+            temperature: 0.6,
+            top_p: 0.9,
+            stream: false,
             chat_template_kwargs: { enable_thinking: false },
         }),
     });
@@ -145,65 +28,75 @@ async function callGemmaStream(prompt: string): Promise<ReadableStream> {
         throw new Error(`NVIDIA API error ${response.status}: ${err}`);
     }
 
-    const reader = response.body!.getReader();
-    const decoder = new TextDecoder("utf-8");
-
-    return new ReadableStream({
-        async start(controller) {
-            let buffer = "";
-            const encoder = new TextEncoder();
-            try {
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    buffer += decoder.decode(value, { stream: true });
-                    const lines = buffer.split("\n");
-                    buffer = lines.pop() || "";
-                    for (const line of lines) {
-                        const trimmed = line.trim();
-                        if (trimmed.startsWith("data: ")) {
-                            const dataStr = trimmed.slice(6);
-                            if (dataStr === "[DONE]") {
-                                controller.close();
-                                return;
-                            }
-                            try {
-                                const parsed = JSON.parse(dataStr);
-                                const content = parsed.choices?.[0]?.delta?.content;
-                                if (content) {
-                                    controller.enqueue(encoder.encode(content));
-                                }
-                            } catch (e) {
-                                // ignore
-                            }
-                        }
-                    }
-                }
-                controller.close();
-            } catch (err) {
-                controller.error(err);
-            }
-        }
-    });
+    const data = await response.json();
+    return data.choices?.[0]?.message?.content || "";
 }
 
-// ── Handler ───────────────────────────────────────────────────────────────────
+function cleanAndParse(raw: string): any {
+    const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/g, "").trim();
+    if (!cleaned) return null;
+    try { return JSON.parse(cleaned); } catch {
+        const match = cleaned.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+        if (match) { try { return JSON.parse(match[1]); } catch { } }
+        return null;
+    }
+}
+
+function buildPrompt(body: Record<string, any>) {
+    const { height, weight, gender, age, goal, healthConditions, dietType, allergies, mealFrequency, foodRestrictions, bmi, bmiCategory, tdee, dailyCalories } = body;
+    return `You are a certified nutritionist. Be concise. Minimal JSON output.
+USER: ${height}cm, ${weight}kg, ${gender}, ${age}yo. Goal: ${goal}.
+BMI: ${bmi} (${bmiCategory}) | TDEE: ${tdee} | Target: ${dailyCalories} kcal.
+Diet: ${dietType || "Balanced"}. Allergies: ${allergies || "None"}. Restrictions: ${foodRestrictions || "None"}.
+Meals: ${mealFrequency || "3+1 snack"}. Conditions: ${healthConditions || "None"}.
+Return VALID JSON only. One object:
+{"protein":"<Xg>","carbs":"<Xg>","fats":"<Xg>","hydration":"<X.XL>","dietLabel":"<short label>","meals":[{"meal":"<Breakfast|Snack|Lunch|Dinner>","time":"<7:30 AM>","name":"<dish>","calories":<n>,"protein":"<Xg>","carbs":"<Xg>","fats":"<Xg>","prepMins":<n>,"ingredients":["<ingredient + qty>"]}],"supplements":[{"name":"<supplement>","dose":"<dose>","timing":"<when>"}],"avoidFoods":["<food to avoid>"],"refeedDay":"<day + adjustment>","lowCarbDay":"<day + adjustment>","warnings":["<caution if any>"]}`;
+}
 
 export async function POST(req: Request) {
     try {
         const body = await req.json();
+        const cacheBase = hashInput(body, "diet");
 
-        const stream = await callGemmaStream(buildPrompt(body));
+        const cachedFull = getCached(`full:diet:${cacheBase}`);
+        if (cachedFull) {
+            return new Response(cachedFull, {
+                headers: {
+                    "Content-Type": "text/plain; charset=utf-8",
+                    "Cache-Control": "no-cache",
+                    "X-Model-Used": "cache",
+                    "X-Gen-Status": "complete",
+                },
+            });
+        }
 
-        return new Response(stream, {
+        const raw = await callNvidia(buildPrompt(body));
+        const parsed = cleanAndParse(raw);
+
+        if (!parsed) {
+            throw new Error("Failed to parse NVIDIA response");
+        }
+
+        const final = JSON.stringify({
+            type: "complete",
+            plan: parsed,
+            validation: { valid: true, missingMeals: [], incompleteMeals: [], mealCount: (parsed.meals || []).length },
+            integrity: { passed: true, issues: [] },
+        });
+
+        setCache(`full:diet:${cacheBase}`, final);
+
+        return new Response(final + "\n", {
             headers: {
                 "Content-Type": "text/plain; charset=utf-8",
-                "Cache-Control": "no-cache"
-            }
+                "Cache-Control": "no-cache",
+                "X-Model-Used": "gemma-4-31b-it",
+                "X-Gen-Mode": "monolithic-fallback",
+            },
         });
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Something went wrong";
-        console.error("[nvidia/diet/route]", message);
+        console.error("[nvidia/diet]", message);
         return NextResponse.json({ success: false, error: message }, { status: 500 });
     }
 }

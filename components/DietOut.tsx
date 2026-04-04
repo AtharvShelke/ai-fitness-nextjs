@@ -7,12 +7,13 @@ import { MacroBar } from "./Macrobar";
 export function DietOut({ plan }: { plan: DietPlan }) {
     const [tab, setTab] = useState<'meals' | 'supplements' | 'avoid' | 'tips'>('meals');
     const [open, setOpen] = useState<number | null>(null);
-    const [opt, setOpt] = useState<Record<number, number>>({});
-    const { summary: s, mealPlan, supplements, avoidFoods, weeklyVariation: wv, warnings, tips } = plan;
+    const { summary: s, meals, supplements, avoidFoods, weeklyVariation: wv, warnings, tips } = plan;
 
     const p = parseInt(s.protein) || 0, c = parseInt(s.carbs) || 0, f = parseInt(s.fats) || 0;
     const tot = (p * 4) + (c * 4) + (f * 9);
-    const pp = Math.round((p * 4 / tot) * 100), cp = Math.round((c * 4 / tot) * 100), fp = Math.round((f * 9 / tot) * 100);
+    const pp = tot > 0 ? Math.round((p * 4 / tot) * 100) : 0;
+    const cp = tot > 0 ? Math.round((c * 4 / tot) * 100) : 0;
+    const fp = tot > 0 ? Math.round((f * 9 / tot) * 100) : 0;
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column' }} className="ob-slide-l">
@@ -63,81 +64,72 @@ export function DietOut({ plan }: { plan: DietPlan }) {
 
             <div style={{ padding: '14px 0' }}>
 
-                {/* MEALS */}
+                {/* MEALS — now flat, one item per meal slot */}
                 {tab === 'meals' && (
                     <div className="ob-fade" style={{ display: 'flex', flexDirection: 'column' }}>
-                        {mealPlan.map((meal, i) => {
-                            const chosen = opt[i] ?? 0, o = meal.options[chosen];
-                            return (
-                                <div key={i} className={`ob-row${open === i ? ' open' : ''}`} style={{ marginTop: i > 0 ? -1 : 0 }}>
-                                    <button onClick={() => setOpen(open === i ? null : i)}
-                                        style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 14px', background: 'transparent', border: 'none', cursor: 'pointer', minHeight: 52 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0, width: 34 }}>
-                                                <p style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 11, fontWeight: 700, color: 'var(--lime)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                                                    {meal.meal.slice(0, 3)}
-                                                </p>
-                                                <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, color: 'var(--ink-3)' }}>{meal.time}</p>
-                                            </div>
-                                            <div style={{ width: 1, height: 26, background: 'var(--border-hi)', flexShrink: 0 }} />
-                                            <p style={{ fontSize: 13, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{meal.meal}</p>
+                        {meals.map((m, i) => (
+                            <div key={i} className={`ob-row${open === i ? ' open' : ''}`} style={{ marginTop: i > 0 ? -1 : 0 }}>
+                                <button onClick={() => setOpen(open === i ? null : i)}
+                                    style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 14px', background: 'transparent', border: 'none', cursor: 'pointer', minHeight: 52 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0, width: 34 }}>
+                                            <p style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 11, fontWeight: 700, color: 'var(--lime)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                                                {m.meal.slice(0, 3)}
+                                            </p>
+                                            <p style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, color: 'var(--ink-3)' }}>{m.time}</p>
                                         </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, marginLeft: 10 }}>
-                                            {o && <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: 'var(--ink-3)' }}>{o.calories} kcal</span>}
-                                            <svg width="10" height="6" viewBox="0 0 10 6" style={{ transition: 'transform 0.22s', transform: open === i ? 'rotate(180deg)' : 'none', flexShrink: 0 }}>
-                                                <path d="M1 1l4 4 4-4" stroke="var(--ink-3)" strokeWidth="1.2" fill="none" strokeLinecap="round" />
-                                            </svg>
-                                        </div>
-                                    </button>
+                                        <div style={{ width: 1, height: 26, background: 'var(--border-hi)', flexShrink: 0 }} />
+                                        <p style={{ fontSize: 13, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name || m.meal}</p>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, marginLeft: 10 }}>
+                                        {m.calories > 0 && <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: 'var(--ink-3)' }}>{m.calories} kcal</span>}
+                                        <svg width="10" height="6" viewBox="0 0 10 6" style={{ transition: 'transform 0.22s', transform: open === i ? 'rotate(180deg)' : 'none', flexShrink: 0 }}>
+                                            <path d="M1 1l4 4 4-4" stroke="var(--ink-3)" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+                                        </svg>
+                                    </div>
+                                </button>
 
-                                    {open === i && o && (
-                                        <div style={{ borderTop: '1px solid var(--border)', padding: '16px 14px' }} className="ob-fade">
-                                            {meal.options.length > 1 && (
-                                                <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
-                                                    {meal.options.map((op, oi) => (
-                                                        <button key={oi} className={`ob-chip${chosen === oi ? ' on' : ''}`} style={{ fontSize: 11 }}
-                                                            onClick={() => setOpt(p => ({ ...p, [i]: oi }))}>
-                                                            OPT {oi + 1}: {op.name}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            )}
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                                                <div>
-                                                    <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 3 }}>{o.name}</p>
-                                                    <p style={{ fontSize: 11, color: 'var(--ink-3)' }}>{o.prepMinutes} min prep · {o.notes}</p>
-                                                </div>
-                                                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                                                    {[[`${o.calories} kcal`, 'var(--ink-2)'], [`P ${o.protein}`, 'var(--lime)'], [`C ${o.carbs}`, 'var(--amber)'], [`F ${o.fats}`, '#60A5FA']].map(([l, c]) => (
-                                                        <span key={l} className="ob-badge" style={{ background: `${c}14`, color: c as string, border: `1px solid ${c}28` }}>{l}</span>
-                                                    ))}
-                                                </div>
+                                {open === i && (
+                                    <div style={{ borderTop: '1px solid var(--border)', padding: '16px 14px' }} className="ob-fade">
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                            <div>
+                                                <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 3 }}>{m.name}</p>
+                                                <p style={{ fontSize: 11, color: 'var(--ink-3)' }}>{m.prepMins} min prep</p>
+                                            </div>
+                                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                                {[[`${m.calories} kcal`, 'var(--ink-2)'], [`P ${m.protein}`, 'var(--lime)'], [`C ${m.carbs}`, 'var(--amber)'], [`F ${m.fats}`, '#60A5FA']].map(([l, c]) => (
+                                                    <span key={l} className="ob-badge" style={{ background: `${c}14`, color: c as string, border: `1px solid ${c}28` }}>{l}</span>
+                                                ))}
+                                            </div>
+                                            {m.ingredients.length > 0 && (
                                                 <div>
                                                     <p className="section-label" style={{ marginBottom: 8 }}>Ingredients</p>
                                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                                                        {o.ingredients.map((ing, j) => (
+                                                        {m.ingredients.map((ing, j) => (
                                                             <span key={j} style={{ fontSize: 11, padding: '4px 10px', border: '1px solid var(--border)', background: 'var(--bg-3)', color: 'var(--ink-3)' }}>{ing}</span>
                                                         ))}
                                                     </div>
                                                 </div>
-                                            </div>
+                                            )}
                                         </div>
-                                    )}
-                                </div>
-                            );
-                        })}
+                                    </div>
+                                )}
+                            </div>
+                        ))}
                         {/* Weekly variation */}
-                        <div style={{ marginTop: 12, border: '1px solid var(--border)', padding: '14px', display: 'flex', gap: 0, flexWrap: 'wrap' }}>
-                            <div style={{ flex: 1, minWidth: 150, padding: '0 14px 0 0' }}>
-                                <p className="section-label" style={{ marginBottom: 5 }}>Refeed Day</p>
-                                <p style={{ fontSize: 12, color: 'var(--ink-2)' }}>{wv.refeedDay}</p>
+                        {(wv.refeedDay || wv.lowCarbDay) && (
+                            <div style={{ marginTop: 12, border: '1px solid var(--border)', padding: '14px', display: 'flex', gap: 0, flexWrap: 'wrap' }}>
+                                <div style={{ flex: 1, minWidth: 150, padding: '0 14px 0 0' }}>
+                                    <p className="section-label" style={{ marginBottom: 5 }}>Refeed Day</p>
+                                    <p style={{ fontSize: 12, color: 'var(--ink-2)' }}>{wv.refeedDay}</p>
+                                </div>
+                                <div style={{ width: 1, background: 'var(--border)', flexShrink: 0 }} />
+                                <div style={{ flex: 1, minWidth: 150, padding: '0 0 0 14px' }}>
+                                    <p className="section-label" style={{ marginBottom: 5 }}>Low-Carb Day</p>
+                                    <p style={{ fontSize: 12, color: 'var(--ink-2)' }}>{wv.lowCarbDay}</p>
+                                </div>
                             </div>
-                            <div style={{ width: 1, background: 'var(--border)', flexShrink: 0 }} />
-                            <div style={{ flex: 1, minWidth: 150, padding: '0 0 0 14px' }}>
-                                <p className="section-label" style={{ marginBottom: 5 }}>Low-Carb Day</p>
-                                <p style={{ fontSize: 12, color: 'var(--ink-2)' }}>{wv.lowCarbDay}</p>
-                            </div>
-                        </div>
+                        )}
                     </div>
                 )}
 

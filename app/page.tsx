@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import axios from 'axios';
+import { useState, useCallback } from 'react';
 import { useMount } from '@/hooks/useMount';
 import { Generating } from '@/components/Generating';
 import { Form } from '@/components/FormShell';
@@ -9,58 +8,15 @@ import { EmptyState } from '@/components/EmptyState';
 import { WorkoutOut } from '@/components/WorkoutOut';
 import { DietOut } from '@/components/DietOut';
 
-import { parse } from 'partial-json';
+import { getSafeDiet, getSafeWorkout } from '@/lib/helpers';
 
-function getSafeWorkout(partial: any, metrics: any) {
-  return {
-      summary: { ...metrics, ...partial.summary },
-      weeklySchedule: (partial.weeklySchedule || []).map((d: any) => ({
-          day: d.day || '',
-          type: d.type || 'rest',
-          focus: d.focus || '',
-          durationMinutes: d.durationMinutes || 0,
-          exercises: d.exercises || []
-      })),
-      warmup: partial.warmup || [],
-      cooldown: partial.cooldown || [],
-      progressionPlan: {
-          week1_2: partial.progressionPlan?.week1_2 || '',
-          week3_4: partial.progressionPlan?.week3_4 || '',
-          week5_6: partial.progressionPlan?.week5_6 || ''
-      },
-      warnings: partial.warnings || [],
-      tips: partial.tips || []
-  };
-}
+// ── Progress state type ────────────────────────────────────────────────────────
 
-function getSafeDiet(partial: any, metrics: any) {
-  return {
-      summary: { ...metrics, ...partial.summary },
-      mealPlan: (partial.mealPlan || []).map((m: any) => ({
-          meal: m.meal || '',
-          time: m.time || '',
-          options: (m.options || []).map((o: any) => ({
-              name: o.name || '',
-              calories: o.calories || 0,
-              protein: o.protein || '0g',
-              carbs: o.carbs || '0g',
-              fats: o.fats || '0g',
-              prepMinutes: o.prepMinutes || 0,
-              ingredients: o.ingredients || [],
-              notes: o.notes || ''
-          }))
-      })),
-      supplements: (partial.supplements || []).map((s: any) => ({
-          name: s.name || '', dose: s.dose || '', timing: s.timing || ''
-      })),
-      avoidFoods: partial.avoidFoods || [],
-      weeklyVariation: {
-          refeedDay: partial.weeklyVariation?.refeedDay || '',
-          lowCarbDay: partial.weeklyVariation?.lowCarbDay || ''
-      },
-      warnings: partial.warnings || [],
-      tips: partial.tips || []
-  };
+interface GenProgress {
+  done: number;
+  total: number;
+  units: string[];   // completed unit names
+  status: 'generating' | 'validating' | 'recovering' | 'complete' | 'error';
 }
 
 export default function Home() {
@@ -69,17 +25,156 @@ export default function Home() {
   const [active, setActive] = useState<'workout' | 'diet' | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [progress, setProgress] = useState<GenProgress | null>(null);
   const mounted = useMount();
 
+  // ── Parse newline-delimited JSON events from stream ───────────────────────
+
+  const processStream = useCallback(async (
+    response: Response,
+    ft: 'workout' | 'diet',
+    metrics: any,
+    data: Record<string, string>
+  ) => {
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+    if (!reader) throw new Error('No response body');
+
+    let buffer = '';
+    let finalPlan: any = null;
+    let finalValidation: any = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+
+        try {
+          const event = JSON.parse(trimmed);
+
+          if (event.type === 'progress') {
+            setLoading(false); // Drop spinner as soon as progress starts
+            setProgress(prev => ({
+              done: event.done,
+              total: event.total,
+              units: [...(prev?.units || []), event.unit],
+              status: 'generating',
+            }));
+          } else if (event.type === 'complete') {
+            finalPlan = event.plan;
+            finalValidation = event.validation;
+
+            setProgress(prev => ({
+              ...prev!,
+              status: 'complete',
+              done: prev?.total || event.validation?.dayCount || event.validation?.mealCount || 0,
+              total: prev?.total || event.validation?.dayCount || event.validation?.mealCount || 0,
+            }));
+
+            // Hydrate and set plan immediately
+            if (ft === 'workout') {
+              setWPlan(getSafeWorkout(finalPlan, metrics, data.goal) as WorkoutPlan);
+              setActive('workout');
+            } else {
+              setDPlan(getSafeDiet(finalPlan, metrics, data.goal, data.dietType) as DietPlan);
+              setActive('diet');
+            }
+          } else if (event.type === 'error') {
+            throw new Error(event.message);
+          }
+        } catch (parseErr) {
+          // For cached responses that are the raw complete event
+          try {
+            const cached = JSON.parse(trimmed);
+            if (cached.plan) {
+              finalPlan = cached.plan;
+              finalValidation = cached.validation;
+              if (ft === 'workout') {
+                setWPlan(getSafeWorkout(finalPlan, metrics, data.goal) as WorkoutPlan);
+                setActive('workout');
+              } else {
+                setDPlan(getSafeDiet(finalPlan, metrics, data.goal, data.dietType) as DietPlan);
+                setActive('diet');
+              }
+            }
+          } catch { /* ignore */ }
+        }
+      }
+    }
+
+    return { plan: finalPlan, validation: finalValidation };
+  }, []);
+
+  // ── Frontend recovery: trigger backend recovery for missing units ──────────
+
+  const recoverMissing = useCallback(async (
+    ft: 'workout' | 'diet',
+    missing: string[],
+    requestData: Record<string, any>,
+    currentPlan: any,
+    metrics: any,
+    data: Record<string, string>
+  ) => {
+    if (missing.length === 0) return;
+
+    setProgress(prev => ({
+      ...prev!,
+      status: 'recovering',
+    }));
+
+    try {
+      const res = await fetch('/api/generate/recover', {
+        method: 'POST',
+        body: JSON.stringify({ type: ft, missing, requestData }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!res.ok) return;
+      const result = await res.json();
+      if (!result.success || !result.recovered) return;
+
+      // Merge recovered units into current plan
+      if (ft === 'workout') {
+        const dayMap = new Map<string, any>();
+        for (const d of (currentPlan.days || [])) dayMap.set(d.day, d);
+        for (const d of result.recovered) dayMap.set(d.day, d);
+        currentPlan.days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+          .map(d => dayMap.get(d)).filter(Boolean);
+        setWPlan(getSafeWorkout(currentPlan, metrics, data.goal) as WorkoutPlan);
+      } else {
+        const mealMap = new Map<string, any>();
+        for (const m of (currentPlan.meals || [])) mealMap.set(m.meal, m);
+        for (const m of result.recovered) mealMap.set(m.meal, m);
+        currentPlan.meals = [...mealMap.values()];
+        setDPlan(getSafeDiet(currentPlan, metrics, data.goal, data.dietType) as DietPlan);
+      }
+
+      setProgress(prev => ({ ...prev!, status: 'complete' }));
+    } catch (err) {
+      console.warn('Recovery failed:', err);
+    }
+  }, []);
+
+  // ── Main generate function ────────────────────────────────────────────────
+
   const generate = async (data: Record<string, string>, ft: 'workout' | 'diet') => {
-    setLoading(true); setError('');
+    setLoading(true);
+    setError('');
+    setProgress({ done: 0, total: ft === 'workout' ? 7 : 4, units: [], status: 'generating' });
 
     // Deterministic metrics calculation
     const h = parseFloat(data.height || '170');
     const w = parseFloat(data.weight || '70');
     const a = parseFloat(data.age || '30');
     const isM = data.gender === 'Male';
-    const bmi = w / ((h/100) ** 2);
+    const bmi = w / ((h / 100) ** 2);
     let bmiCat = "Normal";
     if (bmi < 18.5) bmiCat = "Underweight";
     else if (bmi < 25) bmiCat = "Normal";
@@ -90,10 +185,8 @@ export default function Home() {
     const act = days === 0 ? 1.2 : days <= 3 ? 1.375 : days <= 5 ? 1.55 : 1.725;
     const tdee = Math.round(bmr * act);
     let cals = tdee;
-    if (data.goal?.includes('Lose') || data.goal?.includes('Cut')) cals -= 500;
-    else if (data.goal?.includes('Bulk') || data.goal?.includes('Build')) cals += 300;
-    
-    // Nearest 50
+    if (data.goal?.includes('Lose') || data.goal?.includes('Cut') || data.goal?.includes('Fat') || data.goal?.includes('Tone')) cals -= 500;
+    else if (data.goal?.includes('Bulk') || data.goal?.includes('Build') || data.goal?.includes('Muscle')) cals += 300;
     cals = Math.round(cals / 50) * 50;
 
     const metrics = {
@@ -101,90 +194,65 @@ export default function Home() {
       bmr, tdee, recommendedCalories: cals, dailyCalories: cals
     };
     const requestData = { ...data, ...metrics };
-    
-    const handleChunk = (chunkStr: string) => {
-      try {
-        const cleaned = chunkStr.replace(/^```(?:json)?\s*/i, "").replace(/\s* completion\n?|```$/g, "").replace(/\s*```$/, "").trim();
-        if (!cleaned) return;
-        const partialObj = parse(cleaned);
-        if (partialObj && typeof partialObj === 'object') {
-          if (ft === 'workout') {
-            setWPlan(getSafeWorkout(partialObj, metrics) as WorkoutPlan);
-            setActive('workout');
-          } else {
-            setDPlan(getSafeDiet(partialObj, metrics) as DietPlan);
-            setActive('diet');
-          }
-        }
-      } catch (e) {
-        // ignore parse errors for partial chunks
-      }
-    };
 
     try {
-      let rawText = "";
+      let result: { plan: any; validation: any } | null = null;
+
+      // Try primary (Gemini modular)
       try {
         const url = ft === 'workout' ? '/api/generate/gemini/workout' : '/api/generate/gemini/diet';
         const response = await fetch(url, {
           method: 'POST',
           body: JSON.stringify(requestData),
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 'Content-Type': 'application/json' },
         });
-        if (!response.ok) throw new Error('Primary model generation failed');
-        
+        if (!response.ok) throw new Error('Primary generation failed');
+
         const usedModel = response.headers.get("X-Model-Used") || "gemini-2.5-flash";
         window.dispatchEvent(new CustomEvent('model-active', { detail: usedModel }));
-        
-        const reader = response.body?.getReader();
-        const decoder = new TextDecoder();
-        if (reader) {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            setLoading(false); // Drop loading state as soon as first chunk arrives
-            rawText += decoder.decode(value, { stream: true });
-            handleChunk(rawText);
-          }
-        }
+
+        result = await processStream(response, ft, metrics, data);
       } catch (err) {
         console.warn('Primary LLM failed, falling back to NVIDIA...', err);
+
+        // Fallback to NVIDIA
         const fallbackUrl = ft === 'workout' ? '/api/generate/nvidia/workout' : '/api/generate/nvidia/diet';
         const response = await fetch(fallbackUrl, {
           method: 'POST',
           body: JSON.stringify(requestData),
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 'Content-Type': 'application/json' },
         });
         if (!response.ok) throw new Error('Fallback generation failed');
-        
+
         const usedModel = response.headers.get("X-Model-Used") || "gemma-4-31b-it";
         window.dispatchEvent(new CustomEvent('model-active', { detail: usedModel }));
-        
-        const reader = response.body?.getReader();
-        const decoder = new TextDecoder();
-        rawText = ""; // reset for fallback
-        if (reader) {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            setLoading(false); // Drop loading state for fallback as well
-            rawText += decoder.decode(value, { stream: true });
-            handleChunk(rawText);
-          }
+
+        result = await processStream(response, ft, metrics, data);
+      }
+
+      // ── Post-stream frontend validation & recovery ─────────────────────
+      if (result?.validation && result.plan) {
+        const v = result.validation;
+        const missing: string[] = [];
+
+        if (ft === 'workout' && v.missingDays?.length > 0) {
+          missing.push(...v.missingDays);
+        } else if (ft === 'diet' && v.missingMeals?.length > 0) {
+          missing.push(...v.missingMeals);
+        }
+
+        // Trigger recovery if there are still missing sections after backend retries
+        if (missing.length > 0) {
+          console.log(`[frontend] Detected ${missing.length} missing units, triggering recovery...`);
+          await recoverMissing(ft, missing, requestData, result.plan, metrics, data);
         }
       }
 
-      // Final parse after stream complete
-      const cleaned = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s* completion\n?|```$/g, "").replace(/\s*```$/, "").trim();
-      if (!cleaned) throw new Error("Empty response from API");
-      const planObj = JSON.parse(cleaned);
+      if (!result?.plan) {
+        throw new Error('Empty response from API');
+      }
 
-      // Merge deterministic fields into LLM response
-      planObj.summary = { ...planObj.summary, ...metrics };
-
-      if (ft === 'workout') { setWPlan(planObj); setActive('workout'); }
-      else { setDPlan(planObj); setActive('diet'); }
-
-      // On mobile, scroll to the output section after generation
+      // Mobile scroll
       if (window.innerWidth < 1024) {
         setTimeout(() => {
           document.getElementById('output-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -192,22 +260,84 @@ export default function Home() {
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
-    } finally { setLoading(false); }
+      setProgress(prev => prev ? { ...prev, status: 'error' } : null);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const has = wPlan || dPlan;
+
+  // ── Progress bar component ──────────────────────────────────────────────────
+
+  const ProgressBar = () => {
+    if (!progress || progress.status === 'complete') return null;
+    const pct = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
+    const statusLabel = {
+      generating: 'GENERATING',
+      validating: 'VALIDATING',
+      recovering: 'RECOVERING MISSING',
+      complete: 'COMPLETE',
+      error: 'ERROR',
+    }[progress.status];
+
+    return (
+      <div style={{ padding: '16px 14px', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{
+              width: 6, height: 6,
+              background: progress.status === 'error' ? 'var(--red)' : 'var(--lime)',
+              boxShadow: `0 0 8px ${progress.status === 'error' ? 'var(--red)' : 'var(--lime)'}`,
+              animation: progress.status === 'error' ? 'none' : 'ob-pulse-dot 1s ease-in-out infinite',
+            }} />
+            <span style={{
+              fontFamily: "'Barlow Condensed',sans-serif", fontSize: 10, fontWeight: 700,
+              letterSpacing: '0.18em', color: progress.status === 'error' ? 'var(--red)' : 'var(--lime)',
+            }}>
+              {statusLabel}
+            </span>
+          </div>
+          <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: 'var(--ink-3)' }}>
+            {progress.done}/{progress.total}
+          </span>
+        </div>
+        {/* Bar */}
+        <div style={{ height: 3, background: 'var(--bg-3)', overflow: 'hidden' }}>
+          <div style={{
+            height: '100%',
+            width: `${pct}%`,
+            background: progress.status === 'recovering' ? 'var(--amber)' : 'var(--lime)',
+            transition: 'width 0.3s ease',
+          }} />
+        </div>
+        {/* Unit chips */}
+        {progress.units.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
+            {progress.units.map((u, i) => (
+              <span key={i} className="ob-badge" style={{
+                background: 'var(--lime-dim)', color: 'var(--lime)',
+                border: '1px solid rgba(200,241,53,0.2)', fontSize: 9,
+                animation: 'ob-fade-in 0.3s ease',
+              }}>
+                {u} ✓
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <>
       <div className="ob-page" style={{ opacity: mounted ? 1 : 0, transition: 'opacity 0.5s ease' }}>
         {/* ── HERO ──────────────────────────────────────────── */}
         <div className="hero-grid">
-          {/* Ghost BG text */}
           <div style={{ position: 'absolute', right: -20, bottom: -10, fontFamily: "'Bebas Neue',sans-serif", fontSize: 'clamp(120px,18vw,260px)', lineHeight: 1, letterSpacing: '-0.06em', color: 'rgba(200,241,53,0.025)', pointerEvents: 'none', userSelect: 'none' }}>
             AI
           </div>
 
-          {/* Headline */}
           <div style={{ position: 'relative' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
               <div style={{ width: 6, height: 6, background: 'var(--lime)', boxShadow: '0 0 10px var(--lime)', animation: 'ob-pulse-ring 2s ease-in-out infinite' }} />
@@ -240,12 +370,10 @@ export default function Home() {
             </button>
           </div>
 
-          {/* Stats */}
           <div className="hero-stats">
             {[
               { num: '100%', label: 'AI PERSONALIZED' },
               { num: '2-IN-1', label: 'WORKOUTS & DIET' },
-
             ].map((stat, i) => (
               <div key={i} className="hero-stat">
                 <p style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 34, letterSpacing: '0.04em', color: i === 0 ? 'var(--lime)' : 'var(--ink)', lineHeight: 1 }}>
@@ -258,11 +386,8 @@ export default function Home() {
         </div>
 
         {/* ── MAIN APP GRID ──────────────────────────────────── */}
-        {/* On mobile: form stacked above output
-            On desktop: form left, output right               */}
         <div className="app-grid">
 
-          {/* FORM */}
           <div className="form-panel" id="generator-form">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
               <p style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 15, letterSpacing: '0.14em', color: 'var(--ink-2)' }}>
@@ -283,7 +408,6 @@ export default function Home() {
           {/* OUTPUT */}
           <div className="output-panel" id="output-section">
             <div className="output-header">
-              {/* Left: tab switcher or label */}
               {has ? (
                 wPlan && dPlan ? (
                   <div style={{ display: 'flex', gap: 0 }}>
@@ -305,7 +429,6 @@ export default function Home() {
                 <p className="section-label" style={{ paddingBottom: 14 }}>PROTOCOL OUTPUT</p>
               )}
 
-              {/* Right: export */}
               {has && (
                 <button className="ob-btn-ghost"
                   onClick={() => navigator.clipboard.writeText(JSON.stringify(active === 'workout' ? wPlan : dPlan, null, 2))}
@@ -315,11 +438,15 @@ export default function Home() {
               )}
             </div>
 
-            {loading ? <Generating />
-              : !has ? <EmptyState />
-                : active === 'workout' && wPlan ? <WorkoutOut plan={wPlan} />
-                  : active === 'diet' && dPlan ? <DietOut plan={dPlan} />
-                    : null}
+            {/* Progress bar — shows during generation */}
+            <ProgressBar />
+
+            {loading && !progress ? <Generating />
+              : loading && progress ? <Generating />
+                : !has ? <EmptyState />
+                  : active === 'workout' && wPlan ? <WorkoutOut plan={wPlan} />
+                    : active === 'diet' && dPlan ? <DietOut plan={dPlan} />
+                      : null}
           </div>
         </div>
       </div>

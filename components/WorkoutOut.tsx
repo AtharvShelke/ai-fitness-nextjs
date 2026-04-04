@@ -82,7 +82,6 @@ export function WorkoutOut({ plan }: { plan: WorkoutPlan }) {
                                                         <th className="center">Sets</th>
                                                         <th className="center">Reps</th>
                                                         <th className="center">Rest</th>
-                                                        <th>Coaching Cue</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -95,7 +94,6 @@ export function WorkoutOut({ plan }: { plan: WorkoutPlan }) {
                                                             <td className="center" style={{ fontFamily: "'DM Mono',monospace", color: 'var(--lime)', fontSize: 15 }}>{ex.sets}</td>
                                                             <td className="center" style={{ fontFamily: "'DM Mono',monospace" }}>{ex.reps}</td>
                                                             <td className="center" style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: 'var(--ink-3)' }}>{ex.rest}</td>
-                                                            <td style={{ fontSize: 12, maxWidth: 180, color: 'var(--ink-3)' }}>{ex.tips}</td>
                                                         </tr>
                                                     ))}
                                                 </tbody>

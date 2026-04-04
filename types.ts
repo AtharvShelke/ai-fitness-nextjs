@@ -1,4 +1,5 @@
 // ─── Types ─────────────────────────────────────────────────────────────────────
+// Lean types matching the flattened LLM output + client-side static data merge
 
 interface WorkoutSummary {
     bmi: number; bmiCategory: string; bmr: number;
@@ -6,7 +7,7 @@ interface WorkoutSummary {
 }
 interface Exercise {
     name: string; sets: number; reps: string;
-    rest: string; muscle: string; tips: string;
+    rest: string; muscle: string;
 }
 interface DaySchedule {
     day: string; type: 'training' | 'rest' | 'active_recovery';
@@ -19,18 +20,19 @@ interface WorkoutPlan {
     progressionPlan: { week1_2: string; week3_4: string; week5_6: string };
     warnings: string[]; tips: string[];
 }
+
 interface DietSummary {
     dailyCalories: number; protein: string; carbs: string;
     fats: string; hydration: string; dietLabel: string;
 }
-interface MealOption {
-    name: string; calories: number; protein: string; carbs: string;
-    fats: string; prepMinutes: number; ingredients: string[]; notes: string;
+interface MealItem {
+    meal: string; time: string; name: string;
+    calories: number; protein: string; carbs: string;
+    fats: string; prepMins: number; ingredients: string[];
 }
-interface Meal { meal: string; time: string; options: MealOption[] }
 interface DietPlan {
     summary: DietSummary;
-    mealPlan: Meal[];
+    meals: MealItem[];
     supplements: { name: string; dose: string; timing: string }[];
     avoidFoods: string[];
     weeklyVariation: { refeedDay: string; lowCarbDay: string };
