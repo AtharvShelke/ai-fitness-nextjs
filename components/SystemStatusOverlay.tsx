@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 
 export function SystemStatusOverlay() {
+  const [isVisible, setIsVisible] = useState(true);
   const [activeModel, setActiveModel] = useState<string | null>(null);
 
   useEffect(() => {
@@ -28,6 +29,8 @@ export function SystemStatusOverlay() {
       : { color: activeModel ? 'var(--ink-3)' : 'var(--ink)', fontWeight: 400, opacity: activeModel ? 0.3 : 1 };
   };
 
+  if (!isVisible) return null;
+
   return (
     <div style={{
       position: 'fixed',
@@ -44,7 +47,33 @@ export function SystemStatusOverlay() {
         borderRadius: 4,
         boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
         maxWidth: 280,
+        position: 'relative',
       }}>
+        <button
+          onClick={() => setIsVisible(false)}
+          style={{
+            position: 'absolute',
+            top: 4,
+            right: 4,
+            background: 'none',
+            border: 'none',
+            color: 'var(--ink-3)',
+            cursor: 'pointer',
+            padding: 8,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'color 0.2s ease',
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.color = 'var(--ink)'}
+          onMouseLeave={(e) => e.currentTarget.style.color = 'var(--ink-3)'}
+          aria-label="Close"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
           <div style={{
             width: 6, height: 6, borderRadius: '50%',

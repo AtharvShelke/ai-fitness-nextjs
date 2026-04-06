@@ -16,7 +16,7 @@ export function Step2({ d, set }: { d: Record<string, string>; set: (k: string, 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }} className="ob-fade">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <p className="section-label">Primary Objective</p>
+                <p className="field-label" style={{ marginBottom: 2 }}>🎯 Your Primary Goal</p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {GOALS.map(g => <Chip key={g} label={g} active={d.goal === g} onClick={() => set('goal', g)} />)}
                 </div>
@@ -31,14 +31,14 @@ export function Step3({ d, set, ft }: { d: Record<string, string>; set: (k: stri
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }} className="ob-fade">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <p className="section-label">Dietary Protocol</p>
+                <p className="field-label" style={{ marginBottom: 2 }}>🥗 Dietary Preference</p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {DIETS.map(g => <Chip key={g} label={g} active={d.dietType === g} onClick={() => set('dietType', g)} />)}
                 </div>
             </div>
             {ft === 'workout' ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <p className="section-label">Training Days / Week</p>
+                    <p className="field-label" style={{ marginBottom: 2 }}>📅 Training Days / Week</p>
                     <div style={{ display: 'flex', gap: 6 }}>
                         {[2, 3, 4, 5, 6].map(n => (
                             <button key={n} className={`ob-chip${d.workoutDaysPerWeek === String(n) ? ' on' : ''}`}

@@ -18,8 +18,8 @@ const dmMono = DM_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'OBSIDIAN — Elite Performance System',
-  description: 'The fitness protocol built for those who train like athletes and live like executives.',
+  title: 'Obsidian Fitness — Your AI Fitness Trainer | AI Workout & Diet Generator',
+  description: 'Obsidian Fitness uses AI to generate your personalized workout routine and nutrition plan in seconds. Free. Instant. Science-backed.',
 };
 
 export const viewport: Viewport = {
@@ -37,9 +37,8 @@ export default function RootLayout({
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        {/* Bebas Neue — condensed display. Barlow Condensed — readable mid-weight */}
         <link
-          href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@300;400;500;600;700&family=Barlow:wght@300;400;500&family=DM+Mono:wght@300;400;500&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@300;400;500;600;700&family=Barlow:wght@300;400;500&family=DM+Mono:wght@300;400;500&family=Montserrat:wght@400;600;700;800;900&display=swap"
           rel="stylesheet"
         />
       </head>
@@ -58,85 +57,73 @@ export default function RootLayout({
         <nav style={{
           position: 'sticky', top: 0, zIndex: 100,
           borderBottom: '1px solid var(--border)',
-          background: 'rgba(8,8,9,0.88)',
-          backdropFilter: 'blur(20px) saturate(1.8)',
-          WebkitBackdropFilter: 'blur(20px) saturate(1.8)',
+          background: 'rgba(7,8,10,0.90)',
+          backdropFilter: 'blur(24px) saturate(1.6)',
+          WebkitBackdropFilter: 'blur(24px) saturate(1.6)',
         }}>
           <div style={{
-            maxWidth: 1280, margin: '0 auto',
+            maxWidth: 1320, margin: '0 auto',
             padding: '0 28px',
-            height: 60,
+            height: 58,
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           }}>
-            {/* Wordmark */}
+            {/* Brand */}
             <Link href="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{
-                width: 28, height: 28,
-                background: 'var(--lime)',
-                clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
-                flexShrink: 0,
-              }} />
+              {/* Obsidian crystal mark */}
+              <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+                {/* Outer crystal */}
+                <polygon points="14,2 26,9 26,19 14,26 2,19 2,9" fill="none" stroke="#CAFF3C" strokeWidth="1" opacity="0.35" />
+                {/* Inner facets */}
+                <polygon points="14,5 23,10.5 23,17.5 14,23 5,17.5 5,10.5" fill="none" stroke="#CAFF3C" strokeWidth="0.6" opacity="0.2" />
+                {/* Core gem */}
+                <polygon points="14,8 20,12 20,16 14,20 8,16 8,12" fill="#CAFF3C" opacity="0.9" />
+                {/* Highlight facet */}
+                <polygon points="14,8 20,12 14,14" fill="#07080A" opacity="0.35" />
+                {/* Glow dot */}
+                <circle cx="14" cy="11" r="1.5" fill="white" opacity="0.6" />
+              </svg>
               <span style={{
                 fontFamily: "'Bebas Neue', sans-serif",
-                fontSize: 22, letterSpacing: '0.14em',
+                fontSize: 20, letterSpacing: '0.14em',
                 color: 'var(--ink)', lineHeight: 1,
               }}>
-                OBSIDIAN
+                OBSIDIAN <span style={{ color: 'var(--lime)' }}>FITNESS</span>
               </span>
             </Link>
 
-
-            {/* Right */}
+            {/* Right side */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <span className="fitness-badge">AI Powered</span>
               <span style={{
                 fontFamily: "'DM Mono', monospace",
                 fontSize: 10, color: 'var(--ink-3)',
                 letterSpacing: '0.1em', textTransform: 'uppercase',
               }}>
-                v0.0.1
+                v1.0
               </span>
-              <div style={{
-                width: 32, height: 32,
-                border: '1px solid var(--border-bright)',
-                borderRadius: 2,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                  {[0, 1].map(i => (
-                    <div key={i} style={{ width: 12, height: 1, background: 'var(--ink-2)' }} />
-                  ))}
-                </div>
-              </div>
             </div>
           </div>
         </nav>
 
-        {/* ── MARQUEE ─────────────────────────────────────────── */}
+        {/* ── MARQUEE — fitness mottos ─────────────────────────── */}
         <div style={{
           borderBottom: '1px solid var(--border)',
           background: 'var(--bg-2)',
           overflow: 'hidden',
-          height: 32,
+          height: 30,
           display: 'flex', alignItems: 'center',
         }}>
-          {/*
-            Seamless loop technique:
-            - marquee-inner is a single flat flex row containing the item list TWICE
-            - animation translates exactly -50%, landing pixel-perfect on copy 2's start
-            - when copy 1 scrolls off the left edge, copy 2 is already in view
-            - the animation resets to 0 and the cycle repeats invisibly
-          */}
           <div className="marquee-wrap" style={{ flex: 1, overflow: 'hidden' }}>
             <div className="marquee-inner" aria-hidden="true">
-              {/* Copy 1 + Copy 2 — flat siblings, NOT nested divs */}
               {[0, 1].map(rep => (
                 <span key={rep} style={{ display: 'contents' }}>
                   {[
-                    'PRECISION TRAINING PROTOCOL',
-                    'AI-GENERATED NUTRITION SYSTEM',
-                    'PERIODIZED PERFORMANCE PLAN',
-                    'ELITE ATHLETE METHODOLOGY',
-                    'ADAPTIVE LOAD MANAGEMENT',
+                    'TRAIN HARD. EAT SMART.',
+                    'YOUR GOALS. YOUR PROTOCOL.',
+                    'AI-POWERED NUTRITION',
+                    'PERSONALIZED WORKOUT PLAN',
+                    'FUEL YOUR GAINS',
+                    'PUSH YOUR LIMITS EVERY REP',
                     'SCIENCE-BACKED PROGRAMMING',
                   ].map((text, i) => (
                     <span key={`${rep}-${i}`} style={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}>
@@ -144,12 +131,12 @@ export default function RootLayout({
                         fontFamily: "'Barlow Condensed', sans-serif",
                         fontSize: 10, letterSpacing: '0.2em',
                         color: 'var(--ink-3)', padding: '0 24px',
-                        textTransform: 'uppercase', fontWeight: 500,
+                        textTransform: 'uppercase', fontWeight: 600,
                         whiteSpace: 'nowrap',
                       }}>
                         {text}
                       </span>
-                      <span style={{ color: 'var(--lime)', fontSize: 8, opacity: 0.6, flexShrink: 0 }}>◆</span>
+                      <span style={{ color: 'var(--lime)', fontSize: 7, opacity: 0.55, flexShrink: 0 }}>◆</span>
                     </span>
                   ))}
                 </span>
@@ -168,17 +155,28 @@ export default function RootLayout({
           background: 'var(--bg-2)',
         }}>
           <div style={{
-            maxWidth: 1280, margin: '0 auto',
-            padding: '18px 28px',
+            maxWidth: 1320, margin: '0 auto',
+            padding: '16px 28px',
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            flexWrap: 'wrap', gap: 10,
           }}>
-            <span style={{
-              fontFamily: "'Bebas Neue', sans-serif",
-              fontSize: 13, letterSpacing: '0.18em',
-              color: 'var(--ink-3)',
-            }}>
-              OBSIDIAN PERFORMANCE SYSTEMS
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{
+                fontFamily: "'Bebas Neue', sans-serif",
+                fontSize: 13, letterSpacing: '0.18em',
+                color: 'var(--ink-3)',
+              }}>
+                OBSIDIAN FITNESS
+              </span>
+              <span style={{ color: 'var(--border-hi)', fontSize: 10 }}>·</span>
+              <span style={{
+                fontFamily: "'Barlow Condensed', sans-serif",
+                fontSize: 11, letterSpacing: '0.1em',
+                color: 'var(--ink-4)', textTransform: 'uppercase',
+              }}>
+                YOUR AI FITNESS TRAINER
+              </span>
+            </div>
             <Link
               href="https://atharv-shelke.vercel.app"
               target="_blank"
@@ -186,7 +184,7 @@ export default function RootLayout({
                 fontFamily: "'DM Mono', monospace",
                 fontSize: 10, color: 'var(--lime)',
                 letterSpacing: '0.1em', textDecoration: 'none',
-                opacity: 0.7, transition: 'opacity 0.2s',
+                opacity: 0.65, transition: 'opacity 0.2s',
               }}
             >
               ↗ ATHARV SHELKE

@@ -155,7 +155,9 @@ export function DietOut({ plan }: { plan: DietPlan }) {
                     <div className="ob-fade" style={{ display: 'flex', flexDirection: 'column' }}>
                         {avoidFoods.map((food, i) => (
                             <div key={i} style={{ display: 'flex', gap: 12, padding: '12px 14px', borderBottom: '1px solid var(--border)', borderLeft: '2px solid rgba(255,64,64,0.3)' }}>
-                                <span style={{ color: 'var(--red)', opacity: 0.5, fontSize: 10, marginTop: 2 }}>✕</span>
+                                <svg width="8" height="8" viewBox="0 0 8 8" fill="none" style={{ marginTop: 3, flexShrink: 0 }}>
+                                    <path d="M1.5 1.5L6.5 6.5M6.5 1.5L1.5 6.5" stroke="var(--red)" strokeWidth="1.2" strokeLinecap="round" opacity="0.5" />
+                                </svg>
                                 <p style={{ fontSize: 13, color: 'var(--ink-2)' }}>{food}</p>
                             </div>
                         ))}

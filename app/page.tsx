@@ -7,6 +7,7 @@ import { Form } from '@/components/FormShell';
 import { EmptyState } from '@/components/EmptyState';
 import { WorkoutOut } from '@/components/WorkoutOut';
 import { DietOut } from '@/components/DietOut';
+import { EmailModal } from '@/components/EmailModal';
 
 import { getSafeDiet, getSafeWorkout } from '@/lib/helpers';
 
@@ -26,6 +27,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [progress, setProgress] = useState<GenProgress | null>(null);
+  const [userEmail, setUserEmail] = useState('');
   const mounted = useMount();
 
   // ── Parse newline-delimited JSON events from stream ───────────────────────
@@ -193,7 +195,7 @@ export default function Home() {
       bmi: parseFloat(bmi.toFixed(1)), bmiCategory: bmiCat,
       bmr, tdee, recommendedCalories: cals, dailyCalories: cals
     };
-    const requestData = { ...data, ...metrics };
+    const requestData = { ...data, ...metrics, email: userEmail };
 
     try {
       let result: { plan: any; validation: any } | null = null;
@@ -273,54 +275,75 @@ export default function Home() {
   const ProgressBar = () => {
     if (!progress || progress.status === 'complete') return null;
     const pct = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
-    const statusLabel = {
-      generating: 'GENERATING',
-      validating: 'VALIDATING',
-      recovering: 'RECOVERING MISSING',
-      complete: 'COMPLETE',
-      error: 'ERROR',
-    }[progress.status];
+
+    const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
+      generating: { label: 'BUILDING YOUR PLAN', color: 'var(--lime)', bg: 'var(--lime-dim)' },
+      validating:  { label: 'VALIDATING',         color: 'var(--blue)', bg: 'rgba(77,166,255,0.1)' },
+      recovering:  { label: 'RECOVERING UNITS',   color: 'var(--amber)', bg: 'rgba(255,176,32,0.1)' },
+      complete:    { label: 'COMPLETE',            color: 'var(--lime)', bg: 'var(--lime-dim)' },
+      error:       { label: 'ERROR',               color: 'var(--red)',  bg: 'rgba(255,68,68,0.1)' },
+    };
+
+    const cfg = statusConfig[progress.status] || statusConfig.generating;
 
     return (
-      <div style={{ padding: '16px 14px', borderBottom: '1px solid var(--border)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+      <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', background: 'var(--bg-2)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{
-              width: 6, height: 6,
-              background: progress.status === 'error' ? 'var(--red)' : 'var(--lime)',
-              boxShadow: `0 0 8px ${progress.status === 'error' ? 'var(--red)' : 'var(--lime)'}`,
+              width: 7, height: 7, borderRadius: '50%',
+              background: cfg.color,
+              boxShadow: `0 0 8px ${cfg.color}`,
               animation: progress.status === 'error' ? 'none' : 'ob-pulse-dot 1s ease-in-out infinite',
             }} />
             <span style={{
-              fontFamily: "'Barlow Condensed',sans-serif", fontSize: 10, fontWeight: 700,
-              letterSpacing: '0.18em', color: progress.status === 'error' ? 'var(--red)' : 'var(--lime)',
+              fontFamily: "'Barlow Condensed',sans-serif", fontSize: 11, fontWeight: 700,
+              letterSpacing: '0.18em', color: cfg.color,
             }}>
-              {statusLabel}
+              {cfg.label}
             </span>
           </div>
-          <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: 'var(--ink-3)' }}>
-            {progress.done}/{progress.total}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 11, color: 'var(--ink-3)' }}>
+              {progress.done}/{progress.total}
+            </span>
+            <span style={{
+              fontFamily: "'Barlow Condensed',sans-serif", fontSize: 11, fontWeight: 700,
+              color: cfg.color, letterSpacing: '0.05em',
+              background: cfg.bg,
+              padding: '2px 6px', borderRadius: 2,
+            }}>
+              {pct}%
+            </span>
+          </div>
         </div>
-        {/* Bar */}
-        <div style={{ height: 3, background: 'var(--bg-3)', overflow: 'hidden' }}>
+
+        {/* Progress track */}
+        <div style={{ height: 4, background: 'var(--bg-4)', overflow: 'hidden', borderRadius: 4 }}>
           <div style={{
             height: '100%',
             width: `${pct}%`,
-            background: progress.status === 'recovering' ? 'var(--amber)' : 'var(--lime)',
-            transition: 'width 0.3s ease',
+            background: progress.status === 'recovering'
+              ? `linear-gradient(90deg, var(--amber), #FFD060)`
+              : `linear-gradient(90deg, var(--lime), #90FF00)`,
+            transition: 'width 0.35s cubic-bezier(0.16,1,0.3,1)',
+            borderRadius: 4,
           }} />
         </div>
+
         {/* Unit chips */}
         {progress.units.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 10 }}>
             {progress.units.map((u, i) => (
               <span key={i} className="ob-badge" style={{
                 background: 'var(--lime-dim)', color: 'var(--lime)',
-                border: '1px solid rgba(200,241,53,0.2)', fontSize: 9,
+                border: '1px solid rgba(202,255,60,0.18)', fontSize: 9,
                 animation: 'ob-fade-in 0.3s ease',
               }}>
-                {u} ✓
+                {u}
+                <svg width="8" height="8" viewBox="0 0 8 8" fill="none" style={{ marginLeft: 3 }}>
+                  <path d="M1.5 4L3 5.5L6.5 2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
               </span>
             ))}
           </div>
@@ -331,108 +354,173 @@ export default function Home() {
 
   return (
     <>
+      <EmailModal onVerified={setUserEmail} />
       <div className="ob-page" style={{ opacity: mounted ? 1 : 0, transition: 'opacity 0.5s ease' }}>
-        {/* ── HERO ──────────────────────────────────────────── */}
-        <div className="hero-grid">
-          <div style={{ position: 'absolute', right: -20, bottom: -10, fontFamily: "'Bebas Neue',sans-serif", fontSize: 'clamp(120px,18vw,260px)', lineHeight: 1, letterSpacing: '-0.06em', color: 'rgba(200,241,53,0.025)', pointerEvents: 'none', userSelect: 'none' }}>
-            AI
-          </div>
 
-          <div style={{ position: 'relative' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
-              <div style={{ width: 6, height: 6, background: 'var(--lime)', boxShadow: '0 0 10px var(--lime)', animation: 'ob-pulse-ring 2s ease-in-out infinite' }} />
-              <span style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 10, fontWeight: 700, letterSpacing: '0.28em', color: 'var(--lime)', textTransform: 'uppercase' }}>
-                AI Fitness & Diet Generator
+        {/* ── HERO STRIP — compact, above the fold ────────────────────── */}
+        <div className="hero-strip">
+          <div className="hero-strip-bg" />
+          <div className="hero-strip-inner">
+
+            {/* Eyebrow badge */}
+            <div className="hero-eyebrow">
+              <div style={{
+                width: 7, height: 7, borderRadius: '50%',
+                background: 'var(--lime)', boxShadow: '0 0 12px var(--lime)',
+                animation: 'ob-pulse-ring 2s ease-in-out infinite',
+              }} />
+              <span className="fitness-badge">
+                Your AI Fitness Trainer
               </span>
             </div>
-            <h1 style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 'clamp(48px,9vw,86px)', lineHeight: 0.92, letterSpacing: '0.02em', color: 'var(--ink)', marginBottom: 20 }}>
-              AI WORKOUT &<br />
-              <span style={{ color: 'var(--lime)', textShadow: '0 0 40px rgba(200,241,53,0.25)' }}>DIET</span><br />
-              GENERATOR
+
+            {/* Main headline */}
+            <h1 className="hero-title">
+              YOUR <span className="accent">OBSIDIAN</span><br />
+              FITNESS PROTOCOL
             </h1>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 18 }}>
-              <div style={{ width: 40, height: 1, background: 'var(--lime)' }} />
-              <div style={{ width: 8, height: 1, background: 'var(--border-hi)' }} />
-              <div style={{ width: 4, height: 1, background: 'var(--border)' }} />
-            </div>
-            <p style={{ fontSize: 14, color: 'var(--ink-2)', maxWidth: 400, lineHeight: 1.85, marginBottom: 28 }}>
-              Stop guessing. Let our AI generate your fully tailored workout routine and
-              personalized meal plan based on your unique biometrics and fitness goals.
-              Start completely free below.
+
+            {/* Sub text */}
+            <p className="hero-subtitle">
+              Stop guessing. Let AI generate your personalized workout routine &amp; meal plan
+              based on your body, goals, and lifestyle — free &amp; instant.
             </p>
+
+            {/* CTA anchor */}
             <button
-              className="ob-btn-lime"
-              style={{ width: 'auto', padding: '0 28px', height: 50, display: 'inline-flex', alignItems: 'center', gap: 12 }}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 10,
+                padding: '10px 20px',
+                background: 'var(--lime-dim)',
+                border: '1px solid var(--border-lime)',
+                color: 'var(--lime)',
+                fontFamily: "'Barlow Condensed',sans-serif",
+                fontSize: 12, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase',
+                cursor: 'pointer', borderRadius: 3,
+                transition: 'all 0.2s',
+                width: 'fit-content',
+              }}
               onClick={() => document.getElementById('generator-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
             >
-              <span>BUILD YOUR PROTOCOL</span>
-              <span style={{ fontSize: 16, marginTop: -2 }}>↓</span>
+              <span>Start Building</span>
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M6 2V10M2 6L6 10L10 6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </button>
           </div>
 
-          <div className="hero-stats">
+          {/* Right — stat pills */}
+          <div className="hero-stats-row">
             {[
-              { num: '100%', label: 'AI PERSONALIZED' },
-              { num: '2-IN-1', label: 'WORKOUTS & DIET' },
-            ].map((stat, i) => (
-              <div key={i} className="hero-stat">
-                <p style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 34, letterSpacing: '0.04em', color: i === 0 ? 'var(--lime)' : 'var(--ink)', lineHeight: 1 }}>
-                  {stat.num}
-                </p>
-                <p className="section-label" style={{ marginTop: 4 }}>{stat.label}</p>
+              { num: '100%', label: 'AI\nPersonalized' },
+              { num: '2 in 1', label: 'Workout &\nNutrition' },
+              { num: 'Free', label: 'No signup\nneeded' },
+            ].map((s, i) => (
+              <div key={i} className="hero-stat-pill">
+                <div className="hero-stat-num">{s.num}</div>
+                <div className="hero-stat-label" style={{ whiteSpace: 'pre-line' }}>{s.label}</div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* ── MAIN APP GRID ──────────────────────────────────── */}
+        {/* ── MAIN APP GRID — form + output side by side ──────────── */}
         <div className="app-grid">
 
+          {/* FORM PANEL */}
           <div className="form-panel" id="generator-form">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-              <p style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 15, letterSpacing: '0.14em', color: 'var(--ink-2)' }}>
-                BUILD YOUR PROTOCOL
+
+            {/* Panel header */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <div style={{
+                  width: 6, height: 6, borderRadius: '50%',
+                  background: 'var(--lime)', boxShadow: '0 0 8px var(--lime)',
+                  animation: 'ob-pulse-dot 2.5s ease-in-out infinite',
+                }} />
+                <p style={{
+                  fontFamily: "'Barlow Condensed',sans-serif",
+                  fontSize: 11, fontWeight: 700, letterSpacing: '0.22em',
+                  color: 'var(--lime)', textTransform: 'uppercase',
+                }}>
+                  Your Profile
+                </p>
+              </div>
+              <h2 style={{
+                fontFamily: "'Bebas Neue',sans-serif",
+                fontSize: 26, letterSpacing: '0.06em', lineHeight: 1.1,
+                color: 'var(--ink)', marginBottom: 4,
+              }}>
+                CONFIGURE YOUR PLAN
+              </h2>
+              <p style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
+                Fill in your details across 3 quick steps to generate your personalized protocol.
               </p>
-              <div style={{ width: 6, height: 6, background: 'var(--lime)', boxShadow: '0 0 8px var(--lime)', animation: 'ob-pulse-dot 2s ease-in-out infinite' }} />
             </div>
 
-            <Form onGenerate={generate} loading={loading} />
+            {/* Form card */}
+            <div className="form-card">
+              <Form onGenerate={generate} loading={loading} />
+            </div>
 
+            {/* Error */}
             {error && (
-              <div style={{ marginTop: 16, padding: '12px 14px', borderLeft: '2px solid var(--red)', background: 'rgba(255,64,64,0.06)', fontSize: 12, color: '#FF8080', lineHeight: 1.6 }}>
-                {error}
+              <div style={{
+                marginTop: 14, padding: '12px 14px',
+                borderLeft: '2px solid var(--red)',
+                background: 'rgba(255,68,68,0.06)',
+                borderRadius: '0 3px 3px 0',
+                fontSize: 13, color: '#FF8888', lineHeight: 1.6,
+                display: 'flex', alignItems: 'flex-start', gap: 8,
+              }}>
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0, marginTop: 2 }}>
+                  <path d="M7 2L12.5 11.5H1.5L7 2Z" stroke="#FF8888" strokeWidth="1.2" strokeLinejoin="round" fill="none" />
+                  <path d="M7 6V8.5" stroke="#FF8888" strokeWidth="1.2" strokeLinecap="round" />
+                  <circle cx="7" cy="10" r="0.6" fill="#FF8888" />
+                </svg>
+                <span>{error}</span>
               </div>
             )}
           </div>
 
-          {/* OUTPUT */}
+          {/* OUTPUT PANEL */}
           <div className="output-panel" id="output-section">
             <div className="output-header">
               {has ? (
                 wPlan && dPlan ? (
                   <div style={{ display: 'flex', gap: 0 }}>
                     {(['workout', 'diet'] as const).map(t => (
-                      <button key={t} className={`ob-tab${active === t ? ' on' : ''}`} onClick={() => setActive(t)} style={{ paddingTop: 0, paddingBottom: 14 }}>
+                      <button
+                        key={t}
+                        className={`ob-tab${active === t ? ' on' : ''}`}
+                        onClick={() => setActive(t)}
+                        style={{ paddingTop: 0, paddingBottom: 14 }}
+                      >
                         {t === 'workout' ? 'TRAINING' : 'NUTRITION'}
                       </button>
                     ))}
                   </div>
                 ) : (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 14 }}>
-                    <div style={{ width: 4, height: 4, background: 'var(--lime)', boxShadow: '0 0 6px var(--lime)' }} />
-                    <p className="section-label" style={{ color: 'var(--lime)' }}>
+                    <div style={{
+                      width: 5, height: 5, borderRadius: '50%',
+                      background: 'var(--lime)', boxShadow: '0 0 6px var(--lime)',
+                    }} />
+                    <p className="section-label" style={{ color: 'var(--lime)', fontSize: 12, letterSpacing: '0.16em' }}>
                       {active === 'workout' ? 'TRAINING PROTOCOL' : 'NUTRITION PROTOCOL'}
                     </p>
                   </div>
                 )
               ) : (
-                <p className="section-label" style={{ paddingBottom: 14 }}>PROTOCOL OUTPUT</p>
+                <p className="section-label" style={{ paddingBottom: 14 }}>RESULTS</p>
               )}
 
               {has && (
-                <button className="ob-btn-ghost"
+                <button
+                  className="ob-btn-ghost"
                   onClick={() => navigator.clipboard.writeText(JSON.stringify(active === 'workout' ? wPlan : dPlan, null, 2))}
-                  style={{ height: 32, padding: '0 12px', fontSize: 10, marginBottom: 12 }}>
+                  style={{ height: 30, padding: '0 12px', fontSize: 10, marginBottom: 12 }}
+                >
                   EXPORT JSON
                 </button>
               )}
@@ -441,12 +529,11 @@ export default function Home() {
             {/* Progress bar — shows during generation */}
             <ProgressBar />
 
-            {loading && !progress ? <Generating />
-              : loading && progress ? <Generating />
-                : !has ? <EmptyState />
-                  : active === 'workout' && wPlan ? <WorkoutOut plan={wPlan} />
-                    : active === 'diet' && dPlan ? <DietOut plan={dPlan} />
-                      : null}
+            {loading || (progress && progress.status !== 'complete' && progress.status !== 'error') ? <Generating />
+              : !has ? <EmptyState />
+                : active === 'workout' && wPlan ? <WorkoutOut plan={wPlan} />
+                  : active === 'diet' && dPlan ? <DietOut plan={dPlan} />
+                    : null}
           </div>
         </div>
       </div>
