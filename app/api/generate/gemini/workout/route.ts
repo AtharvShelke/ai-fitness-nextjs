@@ -1,18 +1,24 @@
-// app/api/generate/gemini/workout/route.ts
-// Uses modular per-day generation with validation, retry, and progress streaming
+// app/api/generate/gemini/workout/route.ts — UPDATED: saves new input fields
 
 import { NextResponse } from "next/server";
 import { hashInput, getCached, setCache } from "@/lib/cache";
+import { getSafeWorkout } from "@/lib/helpers";
 import { generateFullWorkout } from "@/lib/generator";
 import prisma from "@/lib/prisma";
+import { auth } from "@/auth";
+
 
 export async function POST(req: Request) {
     try {
-        const body = await req.json();
-        const { email } = body;
+        const session = await auth();
+        if (!session?.user?.email) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+        const email = session.user.email;
+        const body = (await req.json()) as GenerationBody;
 
         if (email) {
-            const userRecord = await prisma.usedEmail.findUnique({ where: { email } });
+            const userRecord = await prisma.user.findUnique({ where: { email } });
             if (userRecord?.hasUsedWorkout) {
                 return NextResponse.json({ success: false, error: "You have already generated a workout plan." }, { status: 403 });
             }
@@ -20,7 +26,6 @@ export async function POST(req: Request) {
 
         const cacheBase = hashInput(body, "workout");
 
-        // Full plan cache check
         const cachedFull = getCached(`full:workout:${cacheBase}`);
         if (cachedFull) {
             console.log(`[workout/route] Full cache HIT: ${cacheBase}`);
@@ -34,7 +39,6 @@ export async function POST(req: Request) {
             });
         }
 
-        // Stream progress as SSE-like newline-delimited JSON
         const encoder = new TextEncoder();
         const stream = new ReadableStream({
             async start(controller) {
@@ -43,48 +47,68 @@ export async function POST(req: Request) {
                         body,
                         cacheBase,
                         (done, total, latestDay) => {
-                            // Send progress event
                             const progress = JSON.stringify({
                                 type: "progress",
                                 done,
                                 total,
-                                unit: latestDay?.day || "?",
+                                unit: (latestDay as Record<string, unknown>)?.day || "?",
                             });
                             controller.enqueue(encoder.encode(progress + "\n"));
                         }
                     );
 
-                    // Log integrity issues
-                    if (!integrity.passed) {
-                        console.warn(`[workout/route] Integrity issues: ${integrity.issues.join("; ")}`);
+                    if (!(integrity as { passed: boolean }).passed) {
+                        console.warn(`[workout/route] Integrity issues: ${(integrity as { issues: string[] }).issues.join("; ")}`);
                     }
 
-                    // Send final complete plan
                     const final = JSON.stringify({
                         type: "complete",
                         plan,
                         validation: {
-                            valid: validation.valid,
-                            missingDays: validation.missingDays,
-                            incompleteDays: validation.incompleteDays,
-                            dayCount: validation.dayCount,
+                            valid: (validation as { valid: boolean }).valid,
+                            missingDays: (validation as { missingDays: string[] }).missingDays,
+                            incompleteDays: (validation as { incompleteDays: string[] }).incompleteDays,
+                            dayCount: (validation as { dayCount: number }).dayCount,
                         },
                         integrity: {
-                            passed: integrity.passed,
-                            issues: integrity.issues,
+                            passed: (integrity as { passed: boolean }).passed,
+                            issues: (integrity as { issues: string[] }).issues,
                         },
                     });
                     controller.enqueue(encoder.encode(final + "\n"));
 
-                    // Cache the full plan for repeat requests
                     setCache(`full:workout:${cacheBase}`, final);
 
                     if (email) {
                         try {
-                            await prisma.usedEmail.update({
-                                where: { email },
-                                data: { hasUsedWorkout: true }
-                            });
+                            await prisma.$transaction([
+                                prisma.user.update({
+                                    where: { email },
+                                    data: {
+                                        hasUsedWorkout: true,
+                                        height: parseFloat(body.height),
+                                        weight: parseFloat(body.weight),
+                                        age: parseInt(body.age),
+                                        gender: body.gender,
+                                        goal: body.goal,
+                                    }
+                                }),
+                                prisma.generatedPlan.create({
+                                    data: {
+                                        user: { connect: { email } },
+                                        type: "workout",
+                                        data: getSafeWorkout(plan as Record<string, unknown>, {
+                                            bmi: body.bmi || 0,
+                                            bmiCategory: body.bmiCategory || "Normal",
+                                            bmr: body.bmr || 0,
+                                            tdee: body.tdee || 0,
+                                            recommendedCalories: body.recommendedCalories || 0,
+                                        }, body.goal || ""),
+                                        // Store full input snapshot for future retrieval and re-generation
+                                        inputData: body as any,
+                                    }
+                                })
+                            ]);
                         } catch (err) {
                             console.error("[workout/route] Failed to update used status", err);
                         }

@@ -9,10 +9,10 @@ export function SystemStatusOverlay() {
   useEffect(() => {
     const handleActive = (e: any) => setActiveModel(e.detail);
     const handleClear = () => setActiveModel(null);
-    
+
     window.addEventListener('model-active', handleActive);
     window.addEventListener('model-cleared', handleClear);
-    
+
     return () => {
       window.removeEventListener('model-active', handleActive);
       window.removeEventListener('model-cleared', handleClear);
@@ -24,8 +24,8 @@ export function SystemStatusOverlay() {
   const m3 = "gemma-4-31b-it";
 
   const getStyle = (m: string) => {
-    return activeModel === m 
-      ? { color: 'var(--lime)', fontWeight: 600, textShadow: '0 0 10px rgba(200,241,53,0.3)' } 
+    return activeModel === m
+      ? { color: 'var(--lime)', fontWeight: 600, textShadow: '0 0 10px rgba(200,241,53,0.3)' }
       : { color: activeModel ? 'var(--ink-3)' : 'var(--ink)', fontWeight: 400, opacity: activeModel ? 0.3 : 1 };
   };
 
@@ -114,7 +114,7 @@ export function SystemStatusOverlay() {
             }}>
               fallback 1: {m2} <span style={{ fontSize: 11 }}>(~60s)</span>
             </span>
-            <span style={{
+            {/* <span style={{
               fontFamily: "'Barlow', sans-serif",
               fontSize: 12,
               lineHeight: 1.4,
@@ -122,8 +122,8 @@ export function SystemStatusOverlay() {
               ...getStyle(m3)
             }}>
               fallback 2: {m3} <span style={{ fontSize: 11 }}>(~4m)</span>
-            </span>
-            
+            </span> */}
+
             <div style={{
               marginTop: 6,
               paddingTop: 8,

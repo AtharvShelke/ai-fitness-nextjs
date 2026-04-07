@@ -1,19 +1,25 @@
-// app/api/generate/gemini/diet/route.ts
-// Uses modular per-meal generation with validation, retry, and progress streaming
+// app/api/generate/gemini/diet/route.ts — UPDATED: saves new input fields
 
 import { NextResponse } from "next/server";
 import { hashInput, getCached, setCache } from "@/lib/cache";
 import { generateFullDiet } from "@/lib/generator";
 import { getExpectedMeals } from "@/lib/validation";
 import prisma from "@/lib/prisma";
+import { getSafeDiet } from "@/lib/helpers";
+import { auth } from "@/auth";
+
 
 export async function POST(req: Request) {
     try {
-        const body = await req.json();
-        const { email } = body;
+        const session = await auth();
+        if (!session?.user?.email) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+        const email = session.user.email;
+        const body = (await req.json()) as GenerationBody;
 
         if (email) {
-            const userRecord = await prisma.usedEmail.findUnique({ where: { email } });
+            const userRecord = await prisma.user.findUnique({ where: { email } });
             if (userRecord?.hasUsedDiet) {
                 return NextResponse.json({ success: false, error: "You have already generated a diet plan." }, { status: 403 });
             }
@@ -21,7 +27,6 @@ export async function POST(req: Request) {
 
         const cacheBase = hashInput(body, "diet");
 
-        // Full plan cache check
         const cachedFull = getCached(`full:diet:${cacheBase}`);
         if (cachedFull) {
             console.log(`[diet/route] Full cache HIT: ${cacheBase}`);
@@ -50,28 +55,28 @@ export async function POST(req: Request) {
                                 type: "progress",
                                 done,
                                 total,
-                                unit: latestMeal?.meal || "?",
+                                unit: (latestMeal as Record<string, unknown>)?.meal || "?",
                             });
                             controller.enqueue(encoder.encode(progress + "\n"));
                         }
                     );
 
-                    if (!integrity.passed) {
-                        console.warn(`[diet/route] Integrity issues: ${integrity.issues.join("; ")}`);
+                    if (!(integrity as { passed: boolean }).passed) {
+                        console.warn(`[diet/route] Integrity issues: ${(integrity as { issues: string[] }).issues.join("; ")}`);
                     }
 
                     const final = JSON.stringify({
                         type: "complete",
                         plan,
                         validation: {
-                            valid: validation.valid,
-                            missingMeals: validation.missingMeals,
-                            incompleteMeals: validation.incompleteMeals,
-                            mealCount: validation.mealCount,
+                            valid: (validation as { valid: boolean }).valid,
+                            missingMeals: (validation as { missingMeals: string[] }).missingMeals,
+                            incompleteMeals: (validation as { incompleteMeals: string[] }).incompleteMeals,
+                            mealCount: (validation as { mealCount: number }).mealCount,
                         },
                         integrity: {
-                            passed: integrity.passed,
-                            issues: integrity.issues,
+                            passed: (integrity as { passed: boolean }).passed,
+                            issues: (integrity as { issues: string[] }).issues,
                         },
                     });
                     controller.enqueue(encoder.encode(final + "\n"));
@@ -80,11 +85,36 @@ export async function POST(req: Request) {
 
                     if (email) {
                         try {
-                            await prisma.usedEmail.update({
-                                where: { email },
-                                data: { hasUsedDiet: true }
-                            });
-                        } catch (err: any) {
+                            await prisma.$transaction([
+                                prisma.user.update({
+                                    where: { email },
+                                    data: {
+                                        hasUsedDiet: true,
+                                        height: parseFloat(body.height),
+                                        weight: parseFloat(body.weight),
+                                        age: parseInt(body.age),
+                                        gender: body.gender,
+                                        goal: body.goal,
+                                    }
+                                }),
+                                prisma.generatedPlan.create({
+                                    data: {
+                                        user: { connect: { email } },
+                                        type: "diet",
+                                        data: getSafeDiet(
+                                            plan as Record<string, unknown>,
+                                            {
+                                                dailyCalories: body.dailyCalories || body.recommendedCalories || 0,
+                                            },
+                                            body.goal || "",
+                                            body.dietType || ""
+                                        ),
+                                        // Store full input snapshot — includes all new fields
+                                        inputData: body as any, 
+                                    }
+                                })
+                            ]);
+                        } catch (err: unknown) {
                             console.error("[diet/route] Failed to update used status", err);
                         }
                     }

@@ -38,3 +38,56 @@ interface DietPlan {
     weeklyVariation: { refeedDay: string; lowCarbDay: string };
     warnings: string[]; tips: string[];
 }
+interface GenProgress {
+    done: number;
+    total: number;
+    units: string[];   // completed unit names
+    status: 'generating' | 'validating' | 'recovering' | 'complete' | 'error';
+}
+
+interface UserInputData {
+    // Step 1 — Biometrics (existing)
+    height: string;
+    weight: string;
+    age: string;
+    gender: string;
+
+    // Step 2 — Objectives (existing + new)
+    goal: string;
+    targetWeight?: string;        // NEW: e.g. "65kg"
+    timeline?: string;            // NEW: e.g. "12 weeks"
+    fitnessLevel?: string;        // NEW: Beginner | Intermediate | Advanced
+    healthConditions?: string;    // existing
+
+    // Step 3 — Training config (existing + new)
+    workoutDaysPerWeek?: string;  // workout only
+    sessionDuration?: string;     // NEW: e.g. "45-60 min"
+    trainingLocation?: string;    // NEW: Gym | Home | Outdoors | Mixed
+    activityLevel?: string;       // NEW: Sedentary | Lightly Active | Moderately Active | Very Active
+
+    // Step 4 — Nutrition config (existing + new)
+    dietType?: string;
+    allergies?: string;
+    foodRestrictions?: string;
+    mealFrequency?: string;
+    caloricPreference?: string;
+
+    // Step 4 — Lifestyle (NEW)
+    sleepDuration?: string;       // NEW: e.g. "7-8 hours"
+    stressLevel?: string;         // NEW: Low | Moderate | High
+}
+
+// ─── Computed metrics added server-side before generation ────────────────────
+
+interface ComputedMetrics {
+    bmi?: number;
+    bmiCategory?: string;
+    bmr?: number;
+    tdee?: number;
+    recommendedCalories?: number;
+    dailyCalories?: number;
+}
+
+// ─── Full generation request body = inputs + computed metrics ────────────────
+
+type GenerationBody = UserInputData & ComputedMetrics;

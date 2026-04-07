@@ -1,18 +1,7 @@
-// lib/generator.ts — Holistic LLM generator engine
-//
-// WHY THIS CHANGED:
-//   The previous approach generated each workout day / diet meal as a separate
-//   parallel LLM call with no awareness of the other calls happening alongside it.
-//   This caused the model to produce near-identical exercises/dishes across every
-//   unit because each prompt had zero context about what the rest of the plan
-//   contained.  The NVIDIA fallback route already used a single monolithic call
-//   and produced correct output — this file applies the same principle to Gemini
-//   so we get full-plan coherence with Gemini's quality.
-//
-//   The streaming progress UX is preserved: we emit a synthetic progress event
-//   before the final complete event so the frontend progress bar still animates.
+// lib/generator.ts — UPDATED: enriched prompts with new input fields
+// Only buildWorkoutPrompt and buildDietPrompt are changed; all other logic is preserved.
 
-import { GoogleGenAI, ThinkingLevel } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { unitCacheKey, getCached, setCache } from "./cache";
 import {
     validateWorkout, validateDiet,
@@ -21,10 +10,9 @@ import {
     type WorkoutValidation, type DietValidation,
 } from "./validation";
 
+
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 
-// Slightly higher temperature for variety; the model now has full plan context
-// so it doesn't need low temp to stay "coherent" — variety is the goal.
 const BASE_CONFIG = { maxOutputTokens: 8192, temperature: 0.9, topP: 0.95 };
 const MAX_RETRIES = 2;
 
@@ -78,7 +66,7 @@ async function callLLM(prompt: string, model = "gemini-2.5-flash"): Promise<stri
     }
 }
 
-function cleanAndParse(raw: string): any {
+function cleanAndParse(raw: string): unknown {
     const cleaned = raw
         .replace(/^```(?:json)?\s*/i, "")
         .replace(/\s*```$/g, "")
@@ -111,39 +99,69 @@ function buildDayPlan(workoutDays: number): { day: string; dayType: string }[] {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-//  WORKOUT — Single holistic prompt
+//  WORKOUT — enriched prompt
 // ══════════════════════════════════════════════════════════════════════════════
 
-function buildWorkoutPrompt(body: Record<string, any>): string {
+function buildWorkoutPrompt(body: GenerationBody): string {
     const {
         height, weight, gender, age, goal, healthConditions,
-        workoutDaysPerWeek, bmi, bmiCategory, bmr, tdee, recommendedCalories
+        workoutDaysPerWeek, bmi, bmiCategory, bmr, tdee, recommendedCalories,
+        // NEW fields (all optional — safe defaults applied)
+        targetWeight, timeline, fitnessLevel, activityLevel,
+        sessionDuration, trainingLocation, sleepDuration, stressLevel,
     } = body;
 
     const workoutDays = parseInt(workoutDaysPerWeek || "3");
     const dayPlan = buildDayPlan(workoutDays);
 
-    // Build a day-by-day schedule description so the model knows exactly
-    // what type each day is before it starts writing exercises.
     const daySchedule = dayPlan
         .map(({ day, dayType }) => `${day}: ${dayType}`)
         .join(" | ");
 
-    // Derive muscle group rotation based on training days
     const trainingDays = dayPlan.filter(d => d.dayType === "training").map(d => d.day);
     const muscleGroups = getMuscleGroupRotation(workoutDays, goal);
     const muscleAssignment = trainingDays
         .map((day, i) => `${day} → ${muscleGroups[i] || "Full Body"}`)
         .join(", ");
 
+    // Build optional context lines — omit if empty
+    const optionalContext = [
+        targetWeight ? `- Target weight: ${targetWeight}` : null,
+        timeline ? `- Timeline: ${timeline}` : null,
+        fitnessLevel ? `- Self-reported fitness level: ${fitnessLevel}` : null,
+        activityLevel ? `- Daily activity level: ${activityLevel}` : null,
+        sessionDuration ? `- Preferred session duration: ${sessionDuration}` : null,
+        trainingLocation ? `- Training location: ${trainingLocation}` : null,
+        sleepDuration ? `- Sleep per night: ${sleepDuration}` : null,
+        stressLevel ? `- Stress level: ${stressLevel} (adjust recovery emphasis accordingly)` : null,
+    ].filter(Boolean).join("\n");
+
+    // Location-aware equipment note
+    const equipmentNote = trainingLocation === "Home"
+        ? "EQUIPMENT: Home setting — use bodyweight, dumbbells, resistance bands only. No barbells or machines."
+        : trainingLocation === "Outdoors"
+            ? "EQUIPMENT: Outdoor setting — use bodyweight, running, and park-based exercises only."
+            : trainingLocation === "Mixed"
+                ? "EQUIPMENT: Mixed setting — alternate between gym and bodyweight exercises."
+                : "EQUIPMENT: Full gym access — use free weights, cables, and machines as appropriate.";
+
+    // Sleep/stress recovery note
+    const recoveryNote = (sleepDuration === "< 5 hrs" || sleepDuration === "5–6 hrs" || stressLevel === "High")
+        ? "RECOVERY NOTE: User has poor sleep or high stress — reduce volume/intensity, add extra rest days if needed, prioritise compound lifts over isolation."
+        : "";
+
     return `You are an elite personal trainer creating a COMPLETE, COHERENT weekly workout plan.
 
 USER PROFILE:
-- Body: ${height}cm, ${weight}kg, ${gender}, ${age} years old
-- Goal: ${goal}
-- Fitness metrics: BMI ${bmi} (${bmiCategory}) | BMR: ${bmr} kcal | TDEE: ${tdee} kcal | Target: ${recommendedCalories} kcal/day
+- Body: ${height ?? "?"}cm, ${weight ?? "?"}kg, ${gender ?? "unspecified"}, ${age ?? "?"} years old
+- Goal: ${goal ?? "General Fitness"}
+- Fitness metrics: BMI ${bmi ?? "?"} (${bmiCategory ?? "?"}) | BMR: ${bmr ?? "?"} kcal | TDEE: ${tdee ?? "?"} kcal | Target: ${recommendedCalories ?? "?"} kcal/day
 - Training frequency: ${workoutDays} days/week
 - Health conditions: ${healthConditions || "None"}
+${optionalContext ? `\nADDITIONAL CONTEXT:\n${optionalContext}` : ""}
+
+${equipmentNote}
+${recoveryNote}
 
 WEEKLY SCHEDULE (FIXED — do NOT change these day types):
 ${daySchedule}
@@ -158,9 +176,10 @@ CRITICAL RULES — your output will be REJECTED if you break these:
 4. Exercise variety: if you use Bench Press on one day, do NOT use it again any other day.
 5. Rest days and active_recovery days must have an EMPTY exercises array.
 6. All 7 days (Mon through Sun) must be present in the output.
-7. Sets, reps, and rest periods should match the user's fitness level and goal.
+7. Sets, reps, rest periods, and exercise selection must reflect the training location and session duration.
+8. If fitnessLevel is provided, use it directly instead of re-deriving it.
 
-DETERMINE FITNESS LEVEL based on profile (Beginner / Intermediate / Advanced).
+DETERMINE FITNESS LEVEL: ${fitnessLevel || "Derive from profile (Beginner / Intermediate / Advanced)"}.
 
 Return ONLY valid JSON, no markdown, no explanation:
 {
@@ -187,34 +206,16 @@ Return ONLY valid JSON, no markdown, no explanation:
 }
 
 /** Returns muscle group rotation based on days per week and goal */
-function getMuscleGroupRotation(days: number, goal: string): string[] {
+function getMuscleGroupRotation(days: number, goal?: string): string[] {
     const isStrength = goal?.includes("Strength");
     const isEndurance = goal?.includes("Endurance");
 
     const rotations: Record<number, string[]> = {
         2: ["Upper Body (Chest, Shoulders, Triceps)", "Lower Body (Quads, Hamstrings, Glutes, Calves)"],
         3: ["Push (Chest, Shoulders, Triceps)", "Pull (Back, Biceps, Rear Delts)", "Legs (Quads, Hamstrings, Glutes, Calves)"],
-        4: [
-            "Chest & Triceps",
-            "Back & Biceps",
-            "Shoulders & Core",
-            "Legs (Quads, Hamstrings, Glutes)"
-        ],
-        5: [
-            "Chest & Triceps",
-            "Back & Biceps",
-            "Legs (Quads, Hamstrings)",
-            "Shoulders & Core",
-            "Glutes, Calves & Arms"
-        ],
-        6: [
-            "Chest & Triceps",
-            "Back & Biceps",
-            "Legs (Quads, Hamstrings)",
-            "Shoulders & Traps",
-            "Chest & Core (lighter)",
-            "Glutes, Calves & Arms"
-        ],
+        4: ["Chest & Triceps", "Back & Biceps", "Shoulders & Core", "Legs (Quads, Hamstrings, Glutes)"],
+        5: ["Chest & Triceps", "Back & Biceps", "Legs (Quads, Hamstrings)", "Shoulders & Core", "Glutes, Calves & Arms"],
+        6: ["Chest & Triceps", "Back & Biceps", "Legs (Quads, Hamstrings)", "Shoulders & Traps", "Chest & Core (lighter)", "Glutes, Calves & Arms"],
     };
 
     if (isStrength) {
@@ -237,30 +238,28 @@ function getMuscleGroupRotation(days: number, goal: string): string[] {
 }
 
 async function generateWorkoutWithRetry(
-    body: Record<string, any>,
+    body: GenerationBody,
     attempt = 1
-): Promise<any> {
+): Promise<unknown> {
     const t0 = Date.now();
     try {
         const raw = await callLLM(buildWorkoutPrompt(body));
-        const parsed = cleanAndParse(raw);
+        const parsed = cleanAndParse(raw) as Record<string, unknown> | null;
         const dt = Date.now() - t0;
 
-        if (!parsed || !parsed.days || parsed.days.length < 7) {
+        if (!parsed || !Array.isArray(parsed.days) || (parsed.days as unknown[]).length < 7) {
             logGen({ type: "workout", unit: "full_plan", attempt, success: false, durationMs: dt, error: "incomplete_plan" });
             if (attempt <= MAX_RETRIES) return generateWorkoutWithRetry(body, attempt + 1);
             return null;
         }
 
-        // Check for exercise repetition across training days and warn
-        const trainingDays = parsed.days.filter((d: any) => d.type === "training");
-        const exerciseNames = trainingDays.flatMap((d: any) =>
-            (d.exercises || []).map((e: any) => e.name?.toLowerCase())
+        const trainingDays = (parsed.days as Array<Record<string, unknown>>).filter(d => d.type === "training");
+        const exerciseNames = trainingDays.flatMap(d =>
+            ((d.exercises as Array<Record<string, unknown>>) || []).map(e => (e.name as string)?.toLowerCase())
         );
-        const dupes = exerciseNames.filter((name: string, i: number) => exerciseNames.indexOf(name) !== i);
+        const dupes = exerciseNames.filter((name, i) => exerciseNames.indexOf(name) !== i);
 
         if (dupes.length > 2) {
-            // Too many duplicates — retry for better variety
             logGen({ type: "workout", unit: "full_plan", attempt, success: false, durationMs: dt, error: `exercise_duplication: ${dupes.slice(0, 3).join(",")}` });
             if (attempt <= MAX_RETRIES) return generateWorkoutWithRetry(body, attempt + 1);
         }
@@ -276,22 +275,20 @@ async function generateWorkoutWithRetry(
 }
 
 export async function generateFullWorkout(
-    body: Record<string, any>,
+    body: GenerationBody,
     cacheBase: string,
-    onProgress?: (unitsDone: number, totalUnits: number, latestDay: any) => void
-): Promise<{ plan: any; validation: WorkoutValidation; integrity: any; logs: GenerationLog[] }> {
+    onProgress?: (unitsDone: number, totalUnits: number, latestDay: unknown) => void
+): Promise<{ plan: unknown; validation: WorkoutValidation; integrity: unknown; logs: GenerationLog[] }> {
     const workoutDays = parseInt(body.workoutDaysPerWeek || "3");
     const dayPlan = buildDayPlan(workoutDays);
 
-    // Emit a "starting" progress event so the UI isn't frozen at 0
     if (onProgress) onProgress(0, 7, { day: "Generating..." });
 
-    const parsed = await generateWorkoutWithRetry(body);
+    const parsed = await generateWorkoutWithRetry(body) as Record<string, unknown> | null;
 
     if (!parsed) {
-        // Build a fallback plan so we always return something
         const fallbackPlan = {
-            fitnessLevel: "Beginner",
+            fitnessLevel: body.fitnessLevel || "Beginner",
             warnings: ["Plan generation failed — showing default template. Please try again."],
             days: dayPlan.map(({ day, dayType }) => fallbackDay(day, dayType)),
         };
@@ -300,14 +297,12 @@ export async function generateFullWorkout(
         return { plan: fallbackPlan, validation, integrity, logs: getGenerationLogs() };
     }
 
-    // Normalize day names and fill any missing days
-    const dayMap = new Map<string, any>();
-    for (const d of parsed.days) {
-        const normalKey = normalizeDayKey(d.day);
+    const dayMap = new Map<string, unknown>();
+    for (const d of parsed.days as Array<Record<string, unknown>>) {
+        const normalKey = normalizeDayKey(d.day as string);
         if (normalKey) dayMap.set(normalKey, { ...d, day: normalKey });
     }
 
-    // Fill any days the LLM missed
     for (const { day, dayType } of dayPlan) {
         if (!dayMap.has(day)) {
             dayMap.set(day, fallbackDay(day, dayType));
@@ -316,10 +311,9 @@ export async function generateFullWorkout(
 
     parsed.days = ALL_DAYS.map(d => dayMap.get(d)).filter(Boolean);
 
-    // Emit synthetic progress events for the UI
     if (onProgress) {
-        for (let i = 0; i < parsed.days.length; i++) {
-            onProgress(i + 1, 7, parsed.days[i]);
+        for (let i = 0; i < (parsed.days as unknown[]).length; i++) {
+            onProgress(i + 1, 7, (parsed.days as unknown[])[i]);
         }
     }
 
@@ -342,7 +336,7 @@ function normalizeDayKey(d: string): string | null {
     return map[d?.toLowerCase()] || (d?.length === 3 ? d : null);
 }
 
-function fallbackDay(day: string, dayType: string): any {
+function fallbackDay(day: string, dayType: string): unknown {
     if (dayType === "rest") {
         return { day, type: "rest", focus: "Rest Day", mins: 0, exercises: [] };
     }
@@ -362,7 +356,7 @@ function fallbackDay(day: string, dayType: string): any {
 
 
 // ══════════════════════════════════════════════════════════════════════════════
-//  DIET — Single holistic prompt
+//  DIET — enriched prompt
 // ══════════════════════════════════════════════════════════════════════════════
 
 function getExpectedMealSlots(mealFrequency?: string): string[] {
@@ -376,17 +370,19 @@ function getExpectedMealSlots(mealFrequency?: string): string[] {
     return ["Breakfast", "Lunch", "Dinner"];
 }
 
-function buildDietPrompt(body: Record<string, any>): string {
+function buildDietPrompt(body: GenerationBody): string {
     const {
         height, weight, gender, age, goal, healthConditions,
         dietType, allergies, mealFrequency, foodRestrictions,
-        bmi, bmiCategory, tdee, dailyCalories
+        bmi, bmiCategory, tdee, dailyCalories,
+        // NEW fields
+        targetWeight, timeline, fitnessLevel, activityLevel,
+        sleepDuration, stressLevel, caloricPreference,
     } = body;
 
     const mealSlots = getExpectedMealSlots(mealFrequency);
 
-    // Calculate approximate calorie split so meals feel realistic
-    const cals = parseInt(dailyCalories || "2000");
+    const cals = Number(dailyCalories) || 2000;
     const calBreakdown = mealSlots.map(slot => {
         const lower = slot.toLowerCase();
         let pct = 1 / mealSlots.length;
@@ -397,17 +393,34 @@ function buildDietPrompt(body: Record<string, any>): string {
         return `${slot}: ~${Math.round(cals * pct)} kcal`;
     }).join(", ");
 
+    const optionalContext = [
+        targetWeight ? `- Target weight: ${targetWeight}` : null,
+        timeline ? `- Goal timeline: ${timeline}` : null,
+        fitnessLevel ? `- Fitness level: ${fitnessLevel}` : null,
+        activityLevel ? `- Activity level: ${activityLevel} (affects TDEE multiplier)` : null,
+        caloricPreference ? `- Caloric preference: ${caloricPreference}` : null,
+        sleepDuration ? `- Sleep per night: ${sleepDuration}` : null,
+        stressLevel ? `- Stress level: ${stressLevel}` : null,
+    ].filter(Boolean).join("\n");
+
+    // Stress/sleep cortisol note
+    const cortisolNote = (stressLevel === "High" || sleepDuration === "< 5 hrs" || sleepDuration === "5–6 hrs")
+        ? "LIFESTYLE NOTE: High stress or poor sleep elevates cortisol — include magnesium-rich foods, complex carbs in the evening, and avoid stimulants after 2 PM. Adjust supplement recommendations accordingly."
+        : "";
+
     return `You are an expert certified nutritionist creating a COMPLETE, COHERENT daily meal plan.
 
 USER PROFILE:
-- Body: ${height}cm, ${weight}kg, ${gender}, ${age} years old
-- Goal: ${goal}
-- Metrics: BMI ${bmi} (${bmiCategory}) | TDEE: ${tdee} kcal | Daily target: ${dailyCalories} kcal
+- Body: ${height ?? "?"}cm, ${weight ?? "?"}kg, ${gender ?? "unspecified"}, ${age ?? "?"} years old
+- Goal: ${goal ?? "General Health"}
+- Metrics: BMI ${bmi ?? "?"} (${bmiCategory ?? "?"}) | TDEE: ${tdee ?? "?"} kcal | Daily target: ${dailyCalories ?? "2000"} kcal
 - Diet style: ${dietType || "Balanced"}
 - Allergies: ${allergies || "None"}
 - Food restrictions: ${foodRestrictions || "None"}
 - Meal frequency: ${mealFrequency || "3 meals + 1 snack"}
 - Health conditions: ${healthConditions || "None"}
+${optionalContext ? `\nADDITIONAL CONTEXT:\n${optionalContext}` : ""}
+${cortisolNote ? `\n${cortisolNote}` : ""}
 
 REQUIRED MEAL SLOTS (all must be present): ${mealSlots.join(", ")}
 CALORIE DISTRIBUTION GUIDELINE: ${calBreakdown}
@@ -420,7 +433,9 @@ CRITICAL RULES — output will be REJECTED if broken:
 5. Ingredients list must be detailed with quantities for each meal.
 6. Macros (protein/carbs/fats) must be present for every single meal.
 7. All meals must strictly respect allergies and dietary restrictions above.
-8. Total daily calories across all meals should add up close to ${dailyCalories} kcal.
+8. Total daily calories across all meals should add up close to ${dailyCalories ?? "2000"} kcal.
+9. If the user has high stress or poor sleep, include stress-relieving and sleep-supporting foods.
+10. Adjust protein targets upward if the goal is Muscle Gain and include adequate leucine-rich sources.
 
 Return ONLY valid JSON, no markdown, no explanation:
 {
@@ -453,24 +468,23 @@ Return ONLY valid JSON, no markdown, no explanation:
 }
 
 async function generateDietWithRetry(
-    body: Record<string, any>,
+    body: GenerationBody,
     attempt = 1
-): Promise<any> {
+): Promise<unknown> {
     const t0 = Date.now();
     try {
         const raw = await callLLM(buildDietPrompt(body));
-        const parsed = cleanAndParse(raw);
+        const parsed = cleanAndParse(raw) as Record<string, unknown> | null;
         const dt = Date.now() - t0;
 
-        if (!parsed || !parsed.meals || parsed.meals.length === 0) {
+        if (!parsed || !Array.isArray(parsed.meals) || (parsed.meals as unknown[]).length === 0) {
             logGen({ type: "diet", unit: "full_plan", attempt, success: false, durationMs: dt, error: "no_meals" });
             if (attempt <= MAX_RETRIES) return generateDietWithRetry(body, attempt + 1);
             return null;
         }
 
-        // Check for meal name duplication
-        const mealNames = parsed.meals.map((m: any) => m.name?.toLowerCase()).filter(Boolean);
-        const dupes = mealNames.filter((name: string, i: number) => mealNames.indexOf(name) !== i);
+        const mealNames = (parsed.meals as Array<Record<string, unknown>>).map(m => (m.name as string)?.toLowerCase()).filter(Boolean);
+        const dupes = mealNames.filter((name, i) => mealNames.indexOf(name) !== i);
 
         if (dupes.length > 0) {
             logGen({ type: "diet", unit: "full_plan", attempt, success: false, durationMs: dt, error: `meal_duplication: ${dupes.join(",")}` });
@@ -488,15 +502,14 @@ async function generateDietWithRetry(
 }
 
 export async function generateFullDiet(
-    body: Record<string, any>,
+    body: GenerationBody,
     cacheBase: string,
     mealSlots: string[],
-    onProgress?: (unitsDone: number, totalUnits: number, latestMeal: any) => void
-): Promise<{ plan: any; validation: DietValidation; integrity: any; logs: GenerationLog[] }> {
-    // Emit initial progress so UI doesn't feel frozen
+    onProgress?: (unitsDone: number, totalUnits: number, latestMeal: unknown) => void
+): Promise<{ plan: unknown; validation: DietValidation; integrity: unknown; logs: GenerationLog[] }> {
     if (onProgress) onProgress(0, mealSlots.length, { meal: "Generating..." });
 
-    const parsed = await generateDietWithRetry(body);
+    const parsed = await generateDietWithRetry(body) as Record<string, unknown> | null;
 
     if (!parsed) {
         const fallbackPlan = {
@@ -511,26 +524,23 @@ export async function generateFullDiet(
         return { plan: fallbackPlan, validation, integrity, logs: getGenerationLogs() };
     }
 
-    // Ensure all requested meal slots are present
-    const existingSlots = new Set(parsed.meals.map((m: any) => m.meal));
+    const existingSlots = new Set((parsed.meals as Array<Record<string, unknown>>).map(m => m.meal));
     for (const slot of mealSlots) {
         if (!existingSlots.has(slot)) {
-            parsed.meals.push(fallbackMeal(slot, Math.round(parseInt(body.dailyCalories || "2000") / mealSlots.length)));
+            (parsed.meals as unknown[]).push(fallbackMeal(slot, Math.round((Number(body.dailyCalories) || 2000) / mealSlots.length)));
         }
     }
 
-    // Order meals in the expected slot order
     const slotOrder = new Map(mealSlots.map((s, i) => [s, i]));
-    parsed.meals.sort((a: any, b: any) => {
-        const ai = slotOrder.get(a.meal) ?? 99;
-        const bi = slotOrder.get(b.meal) ?? 99;
+    (parsed.meals as Array<Record<string, unknown>>).sort((a, b) => {
+        const ai = slotOrder.get(a.meal as string) ?? 99;
+        const bi = slotOrder.get(b.meal as string) ?? 99;
         return ai - bi;
     });
 
-    // Emit synthetic per-meal progress events for the UI progress bar
     if (onProgress) {
-        for (let i = 0; i < parsed.meals.length; i++) {
-            onProgress(i + 1, mealSlots.length, parsed.meals[i]);
+        for (let i = 0; i < (parsed.meals as unknown[]).length; i++) {
+            onProgress(i + 1, mealSlots.length, (parsed.meals as unknown[])[i]);
         }
     }
 
@@ -540,7 +550,7 @@ export async function generateFullDiet(
     return { plan: parsed, validation, integrity, logs: getGenerationLogs() };
 }
 
-function fallbackMeal(mealSlot: string, calorieBudget: number): any {
+function fallbackMeal(mealSlot: string, calorieBudget: number): unknown {
     const lower = mealSlot.toLowerCase();
     if (lower.includes("snack")) {
         return {
@@ -568,39 +578,38 @@ function fallbackMeal(mealSlot: string, calorieBudget: number): any {
 
 
 // ══════════════════════════════════════════════════════════════════════════════
-//  RECOVERY — kept for compatibility but simplified
+//  RECOVERY — kept for compatibility
 // ══════════════════════════════════════════════════════════════════════════════
 
 export async function recoverWorkoutDays(
-    body: Record<string, any>,
+    body: GenerationBody,
     missingDays: string[],
     cacheBase: string
-): Promise<any[]> {
-    // For recovery we just regenerate the full plan and extract the missing days
-    const result = await generateWorkoutWithRetry(body);
+): Promise<unknown[]> {
+    const result = await generateWorkoutWithRetry(body) as Record<string, unknown> | null;
     if (!result) return missingDays.map(day => fallbackDay(day, "training"));
 
     return missingDays.map(day => {
-        const found = result.days?.find((d: any) =>
-            normalizeDayKey(d.day) === day
+        const found = (result.days as Array<Record<string, unknown>>)?.find(d =>
+            normalizeDayKey(d.day as string) === day
         );
         return found || fallbackDay(day, "training");
     });
 }
 
 export async function recoverDietMeals(
-    body: Record<string, any>,
+    body: GenerationBody,
     missingMeals: string[],
     cacheBase: string
-): Promise<any[]> {
-    const result = await generateDietWithRetry(body);
+): Promise<unknown[]> {
+    const result = await generateDietWithRetry(body) as Record<string, unknown> | null;
     if (!result) {
-        const totalCals = parseInt(body.dailyCalories || "2000");
+        const totalCals = Number(body.dailyCalories) || 2000;
         return missingMeals.map(slot => fallbackMeal(slot, Math.round(totalCals / missingMeals.length)));
     }
 
     return missingMeals.map(slot => {
-        const found = result.meals?.find((m: any) => m.meal === slot);
-        return found || fallbackMeal(slot, Math.round(parseInt(body.dailyCalories || "2000") / missingMeals.length));
+        const found = (result.meals as Array<Record<string, unknown>>)?.find(m => m.meal === slot);
+        return found || fallbackMeal(slot, Math.round((Number(body.dailyCalories) || 2000) / missingMeals.length));
     });
 }

@@ -7,13 +7,66 @@ import {
 } from "./static-data";
 
 /**
+ * Calculate BMI, BMR, TDEE, and Target Calories from raw inputs.
+ */
+export function calculateMetrics(data: any) {
+    const h = parseFloat(data.height || '170');
+    const w = parseFloat(data.weight || '70');
+    const a = parseFloat(data.age || '30');
+    const isM = data.gender === 'Male';
+    
+    const bmi = w / ((h / 100) ** 2);
+    let bmiCat = "Normal";
+    if (bmi < 18.5) bmiCat = "Underweight";
+    else if (bmi < 25) bmiCat = "Normal";
+    else if (bmi < 30) bmiCat = "Overweight";
+    else bmiCat = "Obese";
+
+    const bmr = Math.round(10 * w + 6.25 * h - 5 * a + (isM ? 5 : -161));
+    const days = parseInt(data.workoutDaysPerWeek || '3');
+    const act = days === 0 ? 1.2 : days <= 3 ? 1.375 : days <= 5 ? 1.55 : 1.725;
+    const tdee = Math.round(bmr * act);
+    
+    let cals = tdee;
+    const goalStr = (data.goal || '').toLowerCase();
+    if (goalStr.includes('lose') || goalStr.includes('cut') || goalStr.includes('fat') || goalStr.includes('tone')) {
+        cals -= 500;
+    } else if (goalStr.includes('bulk') || goalStr.includes('build') || goalStr.includes('muscle')) {
+        cals += 300;
+    }
+    cals = Math.round(cals / 50) * 50;
+
+    return {
+        bmi: parseFloat(bmi.toFixed(1)),
+        bmiCategory: bmiCat,
+        bmr,
+        tdee,
+        recommendedCalories: cals,
+        dailyCalories: cals
+    };
+}
+
+/**
  * Hydrate the lean LLM workout output into a full WorkoutPlan.
  * LLM outputs: { fitnessLevel, days[], warnings[] }
  * We add: summary metrics, warmup, cooldown, progressionPlan, tips
  */
 export function getSafeWorkout(partial: any, metrics: any, goal?: string) {
-    // LLM uses flat structure: { fitnessLevel, days: [...] }
-    // We reshape to the UI's expected structure
+    // Ensure metrics has defaults to prevent .toFixed errors
+    const safeMetrics = {
+        bmi: metrics?.bmi ?? 0,
+        bmiCategory: metrics?.bmiCategory ?? 'Normal',
+        bmr: metrics?.bmr ?? 0,
+        tdee: metrics?.tdee ?? 0,
+        recommendedCalories: metrics?.recommendedCalories ?? 0,
+        ...metrics
+    };
+    // Clean out undefined from spread if they existed
+    if (safeMetrics.bmi === undefined) safeMetrics.bmi = 0;
+    if (safeMetrics.bmr === undefined) safeMetrics.bmr = 0;
+    if (safeMetrics.tdee === undefined) safeMetrics.tdee = 0;
+    if (safeMetrics.recommendedCalories === undefined) safeMetrics.recommendedCalories = 0;
+
     const days = (partial.days || partial.weeklySchedule || []).map((d: any) => ({
         day: d.day || '',
         type: d.type || 'rest',
@@ -30,7 +83,7 @@ export function getSafeWorkout(partial: any, metrics: any, goal?: string) {
 
     return {
         summary: {
-            ...metrics,
+            ...safeMetrics,
             fitnessLevel: partial.fitnessLevel || partial.summary?.fitnessLevel || 'Beginner',
         },
         weeklySchedule: days,
@@ -48,6 +101,12 @@ export function getSafeWorkout(partial: any, metrics: any, goal?: string) {
  * We add: summary with dailyCalories, weeklyVariation object, tips
  */
 export function getSafeDiet(partial: any, metrics: any, goal?: string, dietType?: string) {
+    const safeMetrics = {
+        dailyCalories: metrics?.dailyCalories ?? 0,
+        ...metrics
+    };
+    if (safeMetrics.dailyCalories === undefined) safeMetrics.dailyCalories = 0;
+
     // Handle both flat meals and legacy nested mealPlan.options
     let meals: any[] = [];
     if (partial.meals && Array.isArray(partial.meals)) {
@@ -82,7 +141,7 @@ export function getSafeDiet(partial: any, metrics: any, goal?: string, dietType?
 
     return {
         summary: {
-            dailyCalories: metrics.dailyCalories,
+            ...safeMetrics,
             protein: partial.protein || partial.summary?.protein || '0g',
             carbs: partial.carbs || partial.summary?.carbs || '0g',
             fats: partial.fats || partial.summary?.fats || '0g',

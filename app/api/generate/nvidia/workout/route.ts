@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 import { hashInput, getCached, setCache, unitCacheKey } from "@/lib/cache";
 import { ALL_DAYS } from "@/lib/validation";
 import prisma from "@/lib/prisma";
+import { getSafeWorkout } from "@/lib/helpers";
 
 // ── NVIDIA non-streaming call ─────────────────────────────────────────────────
 
@@ -59,13 +60,19 @@ Return VALID JSON only. EXACTLY 7 days. One object:
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 
+import { auth } from "@/auth";
+
 export async function POST(req: Request) {
     try {
+        const session = await auth();
+        if (!session?.user?.email) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+        const email = session.user.email;
         const body = await req.json();
-        const { email } = body;
 
         if (email) {
-            const userRecord = await prisma.usedEmail.findUnique({ where: { email } });
+            const userRecord = await prisma.user.findUnique({ where: { email } });
             if (userRecord?.hasUsedWorkout) {
                 return NextResponse.json({ success: false, error: "You have already generated a workout plan." }, { status: 403 });
             }
@@ -103,10 +110,33 @@ export async function POST(req: Request) {
 
         if (email) {
             try {
-                await prisma.usedEmail.update({
-                    where: { email },
-                    data: { hasUsedWorkout: true }
-                });
+                await prisma.$transaction([
+                    prisma.user.update({
+                        where: { email },
+                        data: {
+                            hasUsedWorkout: true,
+                            height: parseFloat(body.height),
+                            weight: parseFloat(body.weight),
+                            age: parseInt(body.age),
+                            gender: body.gender,
+                            goal: body.goal
+                        }
+                    }),
+                    prisma.generatedPlan.create({
+                        data: {
+                            user: { connect: { email } },
+                            type: "workout",
+                            data: getSafeWorkout(parsed, {
+                                bmi: body.bmi || 0,
+                                bmiCategory: body.bmiCategory || 'Normal',
+                                bmr: body.bmr || 0,
+                                tdee: body.tdee || 0,
+                                recommendedCalories: body.recommendedCalories || 0,
+                            }, body.goal || ''),
+                            inputData: body
+                        }
+                    })
+                ]);
             } catch (err) {
                 console.error("[nvidia/workout] Failed to update used status", err);
             }

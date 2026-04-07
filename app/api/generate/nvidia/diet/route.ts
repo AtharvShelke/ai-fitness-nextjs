@@ -4,6 +4,7 @@
 import { NextResponse } from "next/server";
 import { hashInput, getCached, setCache } from "@/lib/cache";
 import prisma from "@/lib/prisma";
+import { getSafeDiet } from "@/lib/helpers";
 
 async function callNvidia(prompt: string): Promise<string> {
     const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
@@ -54,13 +55,19 @@ Return VALID JSON only. One object:
 {"protein":"<Xg>","carbs":"<Xg>","fats":"<Xg>","hydration":"<X.XL>","dietLabel":"<short label>","meals":[{"meal":"<Breakfast|Snack|Lunch|Dinner>","time":"<7:30 AM>","name":"<dish>","calories":<n>,"protein":"<Xg>","carbs":"<Xg>","fats":"<Xg>","prepMins":<n>,"ingredients":["<ingredient + qty>"]}],"supplements":[{"name":"<supplement>","dose":"<dose>","timing":"<when>"}],"avoidFoods":["<food to avoid>"],"refeedDay":"<day + adjustment>","lowCarbDay":"<day + adjustment>","warnings":["<caution if any>"]}`;
 }
 
+import { auth } from "@/auth";
+
 export async function POST(req: Request) {
     try {
+        const session = await auth();
+        if (!session?.user?.email) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+        const email = session.user.email;
         const body = await req.json();
-        const { email } = body;
 
         if (email) {
-            const userRecord = await prisma.usedEmail.findUnique({ where: { email } });
+            const userRecord = await prisma.user.findUnique({ where: { email } });
             if (userRecord?.hasUsedDiet) {
                 return NextResponse.json({ success: false, error: "You have already generated a diet plan." }, { status: 403 });
             }
@@ -98,10 +105,29 @@ export async function POST(req: Request) {
 
         if (email) {
             try {
-                await prisma.usedEmail.update({
-                    where: { email },
-                    data: { hasUsedDiet: true }
-                });
+                await prisma.$transaction([
+                    prisma.user.update({
+                        where: { email },
+                        data: {
+                            hasUsedDiet: true,
+                            height: parseFloat(body.height),
+                            weight: parseFloat(body.weight),
+                            age: parseInt(body.age),
+                            gender: body.gender,
+                            goal: body.goal
+                        }
+                    }),
+                    prisma.generatedPlan.create({
+                        data: {
+                            user: { connect: { email } },
+                            type: "diet",
+                            data: getSafeDiet(parsed, {
+                                dailyCalories: body.dailyCalories || body.recommendedCalories || 0,
+                            }, body.goal || '', body.dietType || ''),
+                            inputData: body
+                        }
+                    })
+                ]);
             } catch (err) {
                 console.error("[nvidia/diet] Failed to update used status", err);
             }

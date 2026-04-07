@@ -1,8 +1,8 @@
-// ─── Form shell ───────────────────────────────────────────────────────────────
+// components/FormShell.tsx — UPDATED: now drives 4 steps
 
 import { useState } from "react";
 import { StepProgress } from "./StepProgress";
-import { Step1, Step2, Step3 } from "./Steps";
+import { Step1, Step2, Step3, Step4 } from "./Steps";
 import { STEPS } from "../lib/constants";
 
 export function Form({ onGenerate, loading }: {
@@ -18,9 +18,7 @@ export function Form({ onGenerate, loading }: {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
 
             {/* Protocol type toggle */}
-            <div style={{
-                display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8,
-            }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                 {(['workout', 'diet'] as const).map((val) => (
                     <button
                         key={val}
@@ -66,6 +64,7 @@ export function Form({ onGenerate, loading }: {
                 {step === 0 && <Step1 d={d} set={s} />}
                 {step === 1 && <Step2 d={d} set={s} />}
                 {step === 2 && <Step3 d={d} set={s} ft={ft} />}
+                {step === 3 && <Step4 d={d} set={s} ft={ft} />}
             </div>
 
             {/* Navigation */}

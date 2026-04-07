@@ -3,7 +3,10 @@ import type { Metadata, Viewport } from 'next';
 import { Bebas_Neue, DM_Mono } from 'next/font/google';
 import './globals.css';
 import Link from 'next/link';
+import { Providers } from '@/components/Providers';
+import { SignOutButton } from '@/components/SignOutButton';
 import { SystemStatusOverlay } from '@/components/SystemStatusOverlay';
+import { auth } from '@/auth';
 
 const bebas = Bebas_Neue({
   variable: '--font-display',
@@ -29,9 +32,10 @@ export const viewport: Viewport = {
   userScalable: false,
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const session = await auth();
   return (
     <html lang="en">
       <head>
@@ -93,6 +97,16 @@ export default function RootLayout({
 
             {/* Right side */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              {session?.user && (
+                <Link href="/history" style={{
+                  color: 'var(--lime)', textDecoration: 'none', fontSize: 13,
+                  fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700,
+                  letterSpacing: '0.1em', transition: 'color 0.2s',
+                }}>
+                  HISTORY
+                </Link>
+              )}
+              {session?.user && <SignOutButton />}
               <span className="fitness-badge">AI Powered</span>
               <span style={{
                 fontFamily: "'DM Mono', monospace",
@@ -146,7 +160,9 @@ export default function RootLayout({
         </div>
 
         <main style={{ flex: 1 }}>
-          {children}
+          <Providers>
+            {children}
+          </Providers>
         </main>
 
         {/* ── FOOTER ─────────────────────────────────────────── */}
