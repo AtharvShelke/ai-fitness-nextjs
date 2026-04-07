@@ -5,10 +5,20 @@ import { NextResponse } from "next/server";
 import { hashInput, getCached, setCache } from "@/lib/cache";
 import { generateFullDiet } from "@/lib/generator";
 import { getExpectedMeals } from "@/lib/validation";
+import prisma from "@/lib/prisma";
 
 export async function POST(req: Request) {
     try {
         const body = await req.json();
+        const { email } = body;
+
+        if (email) {
+            const userRecord = await prisma.usedEmail.findUnique({ where: { email } });
+            if (userRecord?.hasUsedDiet) {
+                return NextResponse.json({ success: false, error: "You have already generated a diet plan." }, { status: 403 });
+            }
+        }
+
         const cacheBase = hashInput(body, "diet");
 
         // Full plan cache check
@@ -67,6 +77,17 @@ export async function POST(req: Request) {
                     controller.enqueue(encoder.encode(final + "\n"));
 
                     setCache(`full:diet:${cacheBase}`, final);
+
+                    if (email) {
+                        try {
+                            await prisma.usedEmail.update({
+                                where: { email },
+                                data: { hasUsedDiet: true }
+                            });
+                        } catch (err: any) {
+                            console.error("[diet/route] Failed to update used status", err);
+                        }
+                    }
 
                     controller.close();
                 } catch (e) {

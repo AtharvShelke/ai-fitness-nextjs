@@ -4,10 +4,20 @@
 import { NextResponse } from "next/server";
 import { hashInput, getCached, setCache } from "@/lib/cache";
 import { generateFullWorkout } from "@/lib/generator";
+import prisma from "@/lib/prisma";
 
 export async function POST(req: Request) {
     try {
         const body = await req.json();
+        const { email } = body;
+
+        if (email) {
+            const userRecord = await prisma.usedEmail.findUnique({ where: { email } });
+            if (userRecord?.hasUsedWorkout) {
+                return NextResponse.json({ success: false, error: "You have already generated a workout plan." }, { status: 403 });
+            }
+        }
+
         const cacheBase = hashInput(body, "workout");
 
         // Full plan cache check
@@ -68,6 +78,17 @@ export async function POST(req: Request) {
 
                     // Cache the full plan for repeat requests
                     setCache(`full:workout:${cacheBase}`, final);
+
+                    if (email) {
+                        try {
+                            await prisma.usedEmail.update({
+                                where: { email },
+                                data: { hasUsedWorkout: true }
+                            });
+                        } catch (err) {
+                            console.error("[workout/route] Failed to update used status", err);
+                        }
+                    }
 
                     controller.close();
                 } catch (e) {

@@ -5,6 +5,7 @@
 import { NextResponse } from "next/server";
 import { hashInput, getCached, setCache, unitCacheKey } from "@/lib/cache";
 import { ALL_DAYS } from "@/lib/validation";
+import prisma from "@/lib/prisma";
 
 // ── NVIDIA non-streaming call ─────────────────────────────────────────────────
 
@@ -61,6 +62,15 @@ Return VALID JSON only. EXACTLY 7 days. One object:
 export async function POST(req: Request) {
     try {
         const body = await req.json();
+        const { email } = body;
+
+        if (email) {
+            const userRecord = await prisma.usedEmail.findUnique({ where: { email } });
+            if (userRecord?.hasUsedWorkout) {
+                return NextResponse.json({ success: false, error: "You have already generated a workout plan." }, { status: 403 });
+            }
+        }
+
         const cacheBase = hashInput(body, "workout");
 
         const cachedFull = getCached(`full:workout:${cacheBase}`);
@@ -90,6 +100,17 @@ export async function POST(req: Request) {
         });
 
         setCache(`full:workout:${cacheBase}`, final);
+
+        if (email) {
+            try {
+                await prisma.usedEmail.update({
+                    where: { email },
+                    data: { hasUsedWorkout: true }
+                });
+            } catch (err) {
+                console.error("[nvidia/workout] Failed to update used status", err);
+            }
+        }
 
         return new Response(final + "\n", {
             headers: {

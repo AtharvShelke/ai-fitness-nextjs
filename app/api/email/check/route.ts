@@ -16,10 +16,11 @@ export async function POST(req: Request) {
             create: { email }
         });
 
-        if (userEmail.hasUsedApp) {
+        if (userEmail.hasUsedWorkout && userEmail.hasUsedDiet) {
             return NextResponse.json({ 
                 success: false, 
-                error: "This email has already been used to generate a plan. Please use a different one." 
+                code: 'LIMIT_REACHED',
+                error: "This email has already been used to generate both a workout and a diet plan. Please use a different one." 
             }, { status: 403 });
         }
 

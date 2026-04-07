@@ -3,6 +3,7 @@
 
 import { NextResponse } from "next/server";
 import { hashInput, getCached, setCache } from "@/lib/cache";
+import prisma from "@/lib/prisma";
 
 async function callNvidia(prompt: string): Promise<string> {
     const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
@@ -56,6 +57,15 @@ Return VALID JSON only. One object:
 export async function POST(req: Request) {
     try {
         const body = await req.json();
+        const { email } = body;
+
+        if (email) {
+            const userRecord = await prisma.usedEmail.findUnique({ where: { email } });
+            if (userRecord?.hasUsedDiet) {
+                return NextResponse.json({ success: false, error: "You have already generated a diet plan." }, { status: 403 });
+            }
+        }
+
         const cacheBase = hashInput(body, "diet");
 
         const cachedFull = getCached(`full:diet:${cacheBase}`);
@@ -85,6 +95,17 @@ export async function POST(req: Request) {
         });
 
         setCache(`full:diet:${cacheBase}`, final);
+
+        if (email) {
+            try {
+                await prisma.usedEmail.update({
+                    where: { email },
+                    data: { hasUsedDiet: true }
+                });
+            } catch (err) {
+                console.error("[nvidia/diet] Failed to update used status", err);
+            }
+        }
 
         return new Response(final + "\n", {
             headers: {
