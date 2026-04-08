@@ -40,7 +40,7 @@ export async function savePlanVersion(params: {
     const { userId, planType, inputSnapshot, aiResponse } = params;
     const inputHash = computeInputHash(planType, inputSnapshot);
 
-    return prisma.$transaction(async (tx) => {
+    return prisma.$transaction(async (tx: any) => {
         // Lock existing rows for this user to serialise concurrent inserts.
         const existing = await tx.planHistory.findMany({
             where: { userId },
@@ -54,7 +54,7 @@ export async function savePlanVersion(params: {
         const nextVersion =
             existing.length === 0
                 ? 1
-                : Math.max(...existing.map((r) => r.versionNumber)) + 1;
+                : Math.max(...existing.map((r: any) => r.versionNumber)) + 1;
 
         return tx.planHistory.create({
             data: {

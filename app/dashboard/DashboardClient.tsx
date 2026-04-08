@@ -12,8 +12,8 @@ interface DashboardProps {
 }
 
 export function DashboardClient({ user, plans, userMetrics }: DashboardProps) {
-  const workoutPlans = plans.filter(p => p.type === 'workout');
-  const dietPlans = plans.filter(p => p.type === 'diet');
+  const workoutPlans = plans.filter((p: any) => p.type === 'workout');
+  const dietPlans = plans.filter((p: any) => p.type === 'diet');
 
   const [activeTab, setActiveTab] = useState<'workout' | 'diet'>('workout');
   
@@ -66,7 +66,7 @@ export function DashboardClient({ user, plans, userMetrics }: DashboardProps) {
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 60 }}>
-              {activePlans.map((plan, index) => (
+              {activePlans.map((plan: any, index: number) => (
                 <div key={plan.id} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <h3 style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 24, color: 'var(--lime)', margin: 0, lineHeight: 1 }}>

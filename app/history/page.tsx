@@ -175,7 +175,7 @@ function DetailPanel({ record }: { record: PlanHistoryRecord }) {
                     flexShrink: 0,
                 }}
             >
-                {(["input", "output"] as const).map((t) => (
+                {(["input", "output"] as const).map((t: "input" | "output") => (
                     <button
                         key={t}
                         onClick={() => setActiveTab(t)}
@@ -226,8 +226,8 @@ export default function HistoryPage() {
 
     useEffect(() => {
         fetch("/api/plan-history")
-            .then((r) => r.json())
-            .then((res) => {
+            .then((r: Response) => r.json())
+            .then((res: any) => {
                 if (res.success) {
                     setRecords(res.data);
                     if (res.data.length > 0) setActive(res.data[0]);
@@ -240,8 +240,8 @@ export default function HistoryPage() {
     }, []);
 
     function toggleCheck(id: string) {
-        setSelected((prev) => {
-            if (prev.includes(id)) return prev.filter((x) => x !== id);
+        setSelected((prev: string[]) => {
+            if (prev.includes(id)) return prev.filter((x: string) => x !== id);
             if (prev.length >= 2) return [prev[1], id]; // slide window: keep latest 2
             return [...prev, id];
         });
@@ -250,7 +250,7 @@ export default function HistoryPage() {
     const compareRecords =
         compareMode && selected.length === 2
             ? (selected
-                .map((id) => records.find((r) => r.id === id))
+                .map((id: string) => records.find((r: any) => r.id === id))
                 .filter(Boolean) as PlanHistoryRecord[])
             : null;
 
@@ -444,7 +444,7 @@ export default function HistoryPage() {
                             VERSIONS
                         </span>
                     </div>
-                    {records.map((r) => (
+                    {records.map((r: any) => (
                         <VersionRow
                             key={r.id}
                             record={r}
