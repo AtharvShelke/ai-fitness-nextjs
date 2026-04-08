@@ -8,13 +8,13 @@ export function LandingPage() {
 
   return (
     <div style={{ opacity: mounted ? 1 : 0, transition: 'opacity 0.8s ease', minHeight: 'calc(100vh - 88px)', position: 'relative', overflow: 'hidden' }}>
-      
+
       {/* Background Orbs */}
       <div style={{ position: 'absolute', top: '-10%', left: '-10%', width: '40vw', height: '40vw', background: 'radial-gradient(circle, rgba(202,255,60,0.06) 0%, transparent 70%)', filter: 'blur(60px)', zIndex: 0 }} />
       <div style={{ position: 'absolute', bottom: '-20%', right: '-10%', width: '60vw', height: '60vw', background: 'radial-gradient(circle, rgba(202,255,60,0.04) 0%, transparent 60%)', filter: 'blur(80px)', zIndex: 0 }} />
 
       <div style={{ maxWidth: 1320, margin: '0 auto', padding: '80px 24px', position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-        
+
         {/* Eyebrow */}
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 16px', background: 'rgba(202, 255, 60, 0.05)', border: '1px solid rgba(202, 255, 60, 0.2)', borderRadius: 100, marginBottom: 32 }}>
           <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--lime)', boxShadow: '0 0 12px var(--lime)', animation: 'ob-pulse-ring 2s ease-in-out infinite' }} />
@@ -25,16 +25,16 @@ export function LandingPage() {
 
         {/* Hero Title */}
         <h1 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 'clamp(56px, 10vw, 120px)', lineHeight: 0.85, letterSpacing: '0.02em', color: 'var(--ink)', marginBottom: 24, marginInline: 'auto', maxWidth: 900 }}>
-          STOP GUESSING.<br/>
+          STOP GUESSING.<br />
           <span style={{ color: 'transparent', WebkitTextStroke: '1px var(--lime)', WebkitTextFillColor: 'transparent' }}>AUTOMATE</span> YOUR <span style={{ color: 'var(--lime)', textShadow: '0 0 40px rgba(202,255,60,0.3)' }}>GAINS</span>
         </h1>
 
         <p style={{ fontFamily: "'Barlow', sans-serif", fontSize: 'clamp(16px, 2vw, 20px)', color: 'var(--ink-2)', lineHeight: 1.6, maxWidth: 640, marginBottom: 48 }}>
-          Let advanced AI analyze your body, goals, and lifestyle to instantly generate a hyper-personalized training program and comprehensive meal plan. 
+          Let advanced AI analyze your body, goals, and lifestyle to instantly generate a hyper-personalized training program and comprehensive meal plan.
         </p>
 
         {/* CTA Button */}
-        <button 
+        <button
           onClick={() => signIn('google', { callbackUrl: '/' })}
           style={{
             position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 12,
@@ -50,7 +50,7 @@ export function LandingPage() {
           <div style={{ position: 'absolute', top: 0, left: '-100%', width: '50%', height: '100%', background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)', transform: 'skewX(-20deg)', animation: 'gym-shimmer 3s infinite' }} />
           <span>INITIALIZE SYSTEM WITH GOOGLE</span>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginTop: -2 }}>
-            <path d="M5 12h14M12 5l7 7-7 7"/>
+            <path d="M5 12h14M12 5l7 7-7 7" />
           </svg>
         </button>
 
@@ -63,7 +63,7 @@ export function LandingPage() {
           ].map((feat, i) => (
             <div key={i} style={{ padding: 32, background: 'rgba(12,14,18,0.6)', border: '1px solid var(--border)', borderRadius: 4, textAlign: 'left', backdropFilter: 'blur(12px)' }}>
               <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--lime-dim)', color: 'var(--lime)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
-                 <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d={feat.icon}/></svg>
+                <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d={feat.icon} /></svg>
               </div>
               <h3 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 700, letterSpacing: '0.05em', color: 'var(--ink)', marginBottom: 8, textTransform: 'uppercase' }}>{feat.title}</h3>
               <p style={{ fontFamily: "'Barlow', sans-serif", fontSize: 15, color: 'var(--ink-3)', lineHeight: 1.6 }}>{feat.desc}</p>
@@ -75,3 +75,4 @@ export function LandingPage() {
     </div>
   );
 }
+// hi
