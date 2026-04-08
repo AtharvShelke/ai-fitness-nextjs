@@ -25,7 +25,7 @@ export default async function DashboardPage() {
   }
 
   // Next.js requires passing serialized JSON, so we cast data appropriately
-  const plans = user.plans.map(p => ({
+  const plans = user.plans.map((p: any) => ({
     id: p.id,
     type: p.type,
     createdAt: p.createdAt.toISOString(),
