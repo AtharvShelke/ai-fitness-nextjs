@@ -133,7 +133,7 @@ export function SystemStatusOverlay() {
               color: 'var(--ink-3)',
               lineHeight: 1.4,
             }}>
-              Due to the deep reasoning and personalized multi-step processing required to build elite performance protocols, generation times are longer than typical queries.
+              Due to the deep reasoning and personalized multi-step processing required to build elite workout plans, generation times are longer than typical queries.
             </div>
           </div>
         </div>

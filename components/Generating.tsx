@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 export function Generating() {
     const [dot, setDot] = useState(0);
-    const msgs = ['ANALYZING BIOMETRICS', 'CALCULATING TDEE', 'GENERATING PROTOCOL', 'CALIBRATING LOAD', 'OPTIMIZING SCHEDULE'];
+    const msgs = ['ANALYZING BIOMETRICS', 'CALCULATING TDEE', 'GENERATING PLAN', 'CALIBRATING LOAD', 'OPTIMIZING SCHEDULE'];
     useEffect(() => {
         const id = setInterval(() => setDot(d => (d + 1) % msgs.length), 1800);
         return () => clearInterval(id);

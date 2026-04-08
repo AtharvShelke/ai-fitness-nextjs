@@ -7,6 +7,7 @@ import { Providers } from '@/components/Providers';
 import { SignOutButton } from '@/components/SignOutButton';
 import { SystemStatusOverlay } from '@/components/SystemStatusOverlay';
 import { auth } from '@/auth';
+import prisma from '@/lib/prisma';
 
 const bebas = Bebas_Neue({
   variable: '--font-display',
@@ -36,6 +37,21 @@ export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const session = await auth();
+  
+  let tokenBalance = 0;
+  let tier = "FREE";
+  
+  if (session?.user?.email) {
+      const userRecord = await prisma.user.findUnique({ 
+          where: { email: session.user.email },
+          select: { tokenBalance: true, tier: true }
+      });
+      if (userRecord) {
+          tokenBalance = userRecord.tokenBalance;
+          tier = userRecord.tier;
+      }
+  }
+
   return (
     <html lang="en">
       <head>
@@ -98,15 +114,46 @@ export default async function RootLayout({
             {/* Right side */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
               {session?.user && (
-                <Link href="/history" style={{
-                  color: 'var(--lime)', textDecoration: 'none', fontSize: 13,
-                  fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700,
-                  letterSpacing: '0.1em', transition: 'color 0.2s',
-                }}>
-                  HISTORY
-                </Link>
+                <>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '4px 10px', background: 'var(--surface-2)',
+                    borderRadius: 100, border: '1px solid var(--border)',
+                  }}>
+                    <span style={{ 
+                      width: 6, height: 6, borderRadius: '50%', 
+                      background: tokenBalance > 0 ? 'var(--lime)' : '#ff4444',
+                      boxShadow: tokenBalance > 0 ? '0 0 8px var(--lime)' : '0 0 8px #ff4444'
+                    }} />
+                    <span style={{
+                      fontFamily: "'DM Mono', monospace",
+                      fontSize: 11, color: 'var(--ink-2)',
+                      letterSpacing: '0.05em'
+                    }}>
+                      {tokenBalance} <span style={{opacity: 0.5}}>TOKENS</span>
+                    </span>
+                    <span style={{
+                      marginLeft: 4, padding: '2px 6px',
+                      background: tier === 'ELITE' ? 'linear-gradient(45deg, #CAFF3C, #8CFF00)' : 'var(--bg-3)',
+                      color: tier === 'ELITE' ? '#07080A' : 'var(--ink-3)',
+                      borderRadius: 4, fontSize: 9, fontWeight: 700,
+                      fontFamily: "'Barlow Condensed', sans-serif",
+                      letterSpacing: '0.1em'
+                    }}>
+                      {tier}
+                    </span>
+                  </div>
+                  
+                  <Link href="/history" style={{
+                    color: 'var(--lime)', textDecoration: 'none', fontSize: 13,
+                    fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700,
+                    letterSpacing: '0.1em', transition: 'color 0.2s',
+                  }}>
+                    HISTORY
+                  </Link>
+                  <SignOutButton />
+                </>
               )}
-              {session?.user && <SignOutButton />}
               <span className="fitness-badge">AI Powered</span>
               <span style={{
                 fontFamily: "'DM Mono', monospace",
@@ -133,7 +180,7 @@ export default async function RootLayout({
                 <span key={rep} style={{ display: 'contents' }}>
                   {[
                     'TRAIN HARD. EAT SMART.',
-                    'YOUR GOALS. YOUR PROTOCOL.',
+                    'YOUR GOALS. YOUR PLAN.',
                     'AI-POWERED NUTRITION',
                     'PERSONALIZED WORKOUT PLAN',
                     'FUEL YOUR GAINS',

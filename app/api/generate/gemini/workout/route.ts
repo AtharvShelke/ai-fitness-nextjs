@@ -1,7 +1,7 @@
 // app/api/generate/gemini/workout/route.ts — UPDATED: saves new input fields
 
 import { NextResponse } from "next/server";
-import { hashInput, getCached, setCache } from "@/lib/cache";
+import { hashInput, getPersistentCache, setPersistentCache, acquireLock, releaseLock, waitForCache } from "@/lib/cache";
 import { getSafeWorkout } from "@/lib/helpers";
 import { generateFullWorkout } from "@/lib/generator";
 import prisma from "@/lib/prisma";
@@ -19,17 +19,38 @@ export async function POST(req: Request) {
 
         if (email) {
             const userRecord = await prisma.user.findUnique({ where: { email } });
-            if (userRecord?.hasUsedWorkout) {
-                return NextResponse.json({ success: false, error: "You have already generated a workout plan." }, { status: 403 });
+            if (!userRecord) return NextResponse.json({ success: false, error: "User not found" }, { status: 404 });
+
+            // Lazy Reset Logic
+            if (!userRecord.billingCycleEndsAt || Date.now() > userRecord.billingCycleEndsAt.getTime()) {
+                const newLimit = userRecord.tier === "BASIC" ? 50 : userRecord.tier === "ELITE" ? 1000 : 3;
+                await prisma.user.update({
+                    where: { email },
+                    data: {
+                        tokenBalance: newLimit,
+                        billingCycleEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // +30 days
+                    }
+                });
+            }
+
+            // Atomic token decrement lock
+            const updateCount = await prisma.user.updateMany({
+                where: { email, tokenBalance: { gte: 1 } },
+                data: { tokenBalance: { decrement: 1 } }
+            });
+
+            if (updateCount.count === 0) {
+                return NextResponse.json({ success: false, error: "Insufficient tokens. Please upgrade your plan." }, { status: 402 });
             }
         }
 
         const cacheBase = hashInput(body, "workout");
+        const cacheKey = `full:workout:${cacheBase}`;
 
-        const cachedFull = getCached(`full:workout:${cacheBase}`);
-        if (cachedFull) {
-            console.log(`[workout/route] Full cache HIT: ${cacheBase}`);
-            return new Response(cachedFull, {
+        const dbCache = await getPersistentCache(cacheKey);
+        if (dbCache) {
+            console.log(`[workout/route] Global cache HIT: ${cacheKey}`);
+            return new Response(dbCache, {
                 headers: {
                     "Content-Type": "text/plain; charset=utf-8",
                     "Cache-Control": "no-cache",
@@ -37,6 +58,23 @@ export async function POST(req: Request) {
                     "X-Gen-Status": "complete",
                 },
             });
+        }
+
+        // --- DEDUPLICATION START ---
+        // If we don't get the lock, wait for the other parallel request to finish and populate the cache
+        const hasLock = await acquireLock(cacheKey);
+        if (!hasLock) {
+            console.log(`[workout/route] Request deduplicated! Waiting for cache: ${cacheKey}`);
+            const waitedCache = await waitForCache(cacheKey);
+            if (waitedCache) {
+                return new Response(waitedCache, {
+                    headers: {
+                        "Content-Type": "text/plain; charset=utf-8",
+                        "X-Model-Used": "cache",
+                    },
+                });
+            }
+            // If wait failed/timed out, proceed anyway
         }
 
         const encoder = new TextEncoder();
@@ -77,7 +115,7 @@ export async function POST(req: Request) {
                     });
                     controller.enqueue(encoder.encode(final + "\n"));
 
-                    setCache(`full:workout:${cacheBase}`, final);
+                    await setPersistentCache(cacheKey, "workout", final);
 
                     if (email) {
                         try {
@@ -85,12 +123,19 @@ export async function POST(req: Request) {
                                 prisma.user.update({
                                     where: { email },
                                     data: {
-                                        hasUsedWorkout: true,
                                         height: parseFloat(body.height),
                                         weight: parseFloat(body.weight),
                                         age: parseInt(body.age),
                                         gender: body.gender,
                                         goal: body.goal,
+                                    }
+                                }),
+                                prisma.tokenTransaction.create({
+                                    data: {
+                                        user: { connect: { email } },
+                                        amount: -1,
+                                        type: "GENERATION",
+                                        description: "Generated workout plan",
                                     }
                                 }),
                                 prisma.generatedPlan.create({
@@ -116,12 +161,24 @@ export async function POST(req: Request) {
 
                     controller.close();
                 } catch (e) {
+                    if (email) {
+                        try {
+                            await prisma.user.update({
+                                where: { email },
+                                data: { tokenBalance: { increment: 1 } }
+                            });
+                        } catch (refundErr) {
+                            console.error("[workout/route] Failed to refund token", refundErr);
+                        }
+                    }
                     const errMsg = JSON.stringify({
                         type: "error",
                         message: e instanceof Error ? e.message : "Generation failed",
                     });
                     controller.enqueue(encoder.encode(errMsg + "\n"));
                     controller.close();
+                } finally {
+                    await releaseLock(cacheKey);
                 }
             },
         });

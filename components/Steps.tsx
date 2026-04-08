@@ -26,7 +26,7 @@ export function Step2({ d, set }: { d: Record<string, string>; set: (k: string, 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }} className="ob-fade">
             {/* Primary goal */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <p className="field-label" style={{ marginBottom: 2 }}>🎯 Primary Goal</p>
+                <p className="field-label" style={{ marginBottom: 2 }}>[ PRIMARY GOAL ]</p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {GOALS.map(g => <Chip key={g} label={g} active={d.goal === g} onClick={() => set('goal', g)} />)}
                 </div>
@@ -64,7 +64,7 @@ export function Step3({ d, set, ft }: { d: Record<string, string>; set: (k: stri
 
             {/* Fitness level — shown for both plan types */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <p className="field-label" style={{ marginBottom: 2 }}>🏅 Fitness Level</p>
+                <p className="field-label" style={{ marginBottom: 2 }}>[ FITNESS LEVEL ]</p>
                 <div style={{ display: 'flex', gap: 6 }}>
                     {FITNESS_LEVELS.map(l => (
                         <button key={l} className={`ob-chip${d.fitnessLevel === l ? ' on' : ''}`}
@@ -78,7 +78,7 @@ export function Step3({ d, set, ft }: { d: Record<string, string>; set: (k: stri
 
             {/* Activity level */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <p className="field-label" style={{ marginBottom: 2 }}>⚡ Activity Level</p>
+                <p className="field-label" style={{ marginBottom: 2 }}>[ ACTIVITY LEVEL ]</p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {ACTIVITY_LEVELS.map(l => (
                         <Chip key={l} label={l} active={d.activityLevel === l} onClick={() => set('activityLevel', l)} />
@@ -90,7 +90,7 @@ export function Step3({ d, set, ft }: { d: Record<string, string>; set: (k: stri
                 <>
                     {/* Training days */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        <p className="field-label" style={{ marginBottom: 2 }}>📅 Training Days / Week</p>
+                        <p className="field-label" style={{ marginBottom: 2 }}>[ TRAINING DAYS / WEEK ]</p>
                         <div style={{ display: 'flex', gap: 6 }}>
                             {[2, 3, 4, 5, 6].map(n => (
                                 <button key={n} className={`ob-chip${d.workoutDaysPerWeek === String(n) ? ' on' : ''}`}
@@ -105,7 +105,7 @@ export function Step3({ d, set, ft }: { d: Record<string, string>; set: (k: stri
 
                     {/* Session duration */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        <p className="field-label" style={{ marginBottom: 2 }}>⏱ Session Duration</p>
+                        <p className="field-label" style={{ marginBottom: 2 }}>[ SESSION DURATION ]</p>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                             {SESSION_DURATIONS.map(d_ => (
                                 <Chip key={d_} label={d_} active={d.sessionDuration === d_} onClick={() => set('sessionDuration', d_)} />
@@ -115,7 +115,7 @@ export function Step3({ d, set, ft }: { d: Record<string, string>; set: (k: stri
 
                     {/* Training location */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        <p className="field-label" style={{ marginBottom: 2 }}>📍 Training Location</p>
+                        <p className="field-label" style={{ marginBottom: 2 }}>[ TRAINING LOCATION ]</p>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                             {TRAINING_LOCATIONS.map(l => (
                                 <Chip key={l} label={l} active={d.trainingLocation === l} onClick={() => set('trainingLocation', l)} />
@@ -143,7 +143,7 @@ export function Step4({ d, set, ft }: { d: Record<string, string>; set: (k: stri
 
             {/* Dietary preference — shown for both */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <p className="field-label" style={{ marginBottom: 2 }}>🥗 Dietary Preference</p>
+                <p className="field-label" style={{ marginBottom: 2 }}>[ DIETARY PREFERENCE ]</p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {DIETS.map(g => <Chip key={g} label={g} active={d.dietType === g} onClick={() => set('dietType', g)} />)}
                 </div>
@@ -163,7 +163,7 @@ export function Step4({ d, set, ft }: { d: Record<string, string>; set: (k: stri
 
             {/* Sleep */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <p className="field-label" style={{ marginBottom: 2 }}>😴 Sleep Duration</p>
+                <p className="field-label" style={{ marginBottom: 2 }}>[ SLEEP DURATION ]</p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {SLEEP_OPTIONS.map(s => (
                         <Chip key={s} label={s} active={d.sleepDuration === s} onClick={() => set('sleepDuration', s)} />
@@ -173,7 +173,7 @@ export function Step4({ d, set, ft }: { d: Record<string, string>; set: (k: stri
 
             {/* Stress level */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <p className="field-label" style={{ marginBottom: 2 }}>🧠 Stress Level</p>
+                <p className="field-label" style={{ marginBottom: 2 }}>[ STRESS LEVEL ]</p>
                 <div style={{ display: 'flex', gap: 6 }}>
                     {STRESS_LEVELS.map(s => (
                         <button key={s} className={`ob-chip${d.stressLevel === s ? ' on' : ''}`}

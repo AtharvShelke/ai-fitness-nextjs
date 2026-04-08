@@ -51,7 +51,7 @@ export function EmptyState() {
                     READY TO CRUSH IT?
                 </h2>
                 <p style={{ fontSize: 14, color: 'var(--ink-2)', maxWidth: 280, lineHeight: 1.8, margin: '0 auto' }}>
-                    Complete the form on the left to generate your personalized training &amp; nutrition protocol.
+                    Complete the form on the left to generate your personalized training &amp; nutrition plan.
                 </p>
             </div>
 

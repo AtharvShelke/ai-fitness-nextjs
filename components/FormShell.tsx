@@ -17,7 +17,6 @@ export function Form({ onGenerate, loading }: {
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
 
-            {/* Protocol type toggle */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                 {(['workout', 'diet'] as const).map((val) => (
                     <button
@@ -34,22 +33,15 @@ export function Form({ onGenerate, loading }: {
                             transition: 'all 0.22s cubic-bezier(0.16,1,0.3,1)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                             minHeight: 48,
-                            borderRadius: 3,
-                            boxShadow: ft === val ? '0 4px 20px rgba(202,255,60,0.2)' : 'none',
+                            borderRadius: 0,
+                            boxShadow: 'none',
                         }}
                     >
                         <span style={{ display: 'flex', alignItems: 'center' }}>
                             {val === 'workout' ? (
-                                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                                    <path d="M7 1.5L9.5 5.5H12L9.5 9H11.5L7 12.5L2.5 9H4.5L2 5.5H4.5L7 1.5Z"
-                                        fill={ft === val ? '#07080A' : 'var(--lime)'} opacity={ft === val ? 1 : 0.7} />
-                                </svg>
+                                <span style={{ fontFamily: "'DM Mono', monospace", color: ft === val ? '#07080A' : 'var(--lime)', fontSize: 16 }}>//</span>
                             ) : (
-                                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                                    <circle cx="7" cy="7" r="5" stroke={ft === val ? '#07080A' : '#CAFF3C'} strokeWidth="1" opacity="0.8" />
-                                    <path d="M5 7C5 5.9 5.9 5 7 5" stroke={ft === val ? '#07080A' : '#CAFF3C'} strokeWidth="1" strokeLinecap="round" opacity="0.6" />
-                                    <path d="M5 7.5L6.5 9L9 6" stroke={ft === val ? '#07080A' : '#CAFF3C'} strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
+                                <span style={{ fontFamily: "'DM Mono', monospace", color: ft === val ? '#07080A' : 'var(--lime)', fontSize: 16 }}>::</span>
                             )}
                         </span>
                         {val === 'workout' ? 'TRAINING' : 'NUTRITION'}
@@ -59,7 +51,6 @@ export function Form({ onGenerate, loading }: {
 
             <StepProgress step={step} />
 
-            {/* Step content */}
             <div style={{ minHeight: 220 }}>
                 {step === 0 && <Step1 d={d} set={s} />}
                 {step === 1 && <Step2 d={d} set={s} />}
@@ -67,31 +58,31 @@ export function Form({ onGenerate, loading }: {
                 {step === 3 && <Step4 d={d} set={s} ft={ft} />}
             </div>
 
-            {/* Navigation */}
+
             <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
                 {step > 0 && (
                     <button
                         className="ob-btn-ghost"
                         onClick={() => setStep(p => p - 1)}
-                        style={{ padding: '0 18px', height: 54, flexShrink: 0, borderRadius: 3 }}
+                        style={{ padding: '0 18px', height: 54, flexShrink: 0, borderRadius: 0, fontFamily: "'DM Mono', monospace" }}
                     >
-                        ← BACK
+                        {'< BACK'}
                     </button>
                 )}
                 {step < STEPS.length - 1 ? (
                     <button
                         className="ob-btn-ghost"
                         onClick={() => setStep(p => p + 1)}
-                        style={{ flex: 1, height: 54, borderRadius: 3 }}
+                        style={{ flex: 1, height: 54, borderRadius: 0, border: '1px solid var(--lime)', color: 'var(--lime)' }}
                     >
-                        NEXT STEP →
+                        NEXT STEP  {'>'}
                     </button>
                 ) : (
                     <button
                         className="ob-btn-lime"
                         onClick={() => onGenerate(d, ft)}
                         disabled={loading}
-                        style={{ flex: 1 }}
+                        style={{ flex: 1, borderRadius: 0 }}
                     >
                         {loading
                             ? 'GENERATING YOUR PLAN...'
@@ -101,5 +92,8 @@ export function Form({ onGenerate, loading }: {
                 )}
             </div>
         </div>
+
+
+
     );
 }

@@ -2,7 +2,7 @@
 // NVIDIA fallback for diet — same event format as Gemini route
 
 import { NextResponse } from "next/server";
-import { hashInput, getCached, setCache } from "@/lib/cache";
+import { hashInput, getPersistentCache, setPersistentCache, acquireLock, releaseLock, waitForCache } from "@/lib/cache";
 import prisma from "@/lib/prisma";
 import { getSafeDiet } from "@/lib/helpers";
 
@@ -68,16 +68,38 @@ export async function POST(req: Request) {
 
         if (email) {
             const userRecord = await prisma.user.findUnique({ where: { email } });
-            if (userRecord?.hasUsedDiet) {
-                return NextResponse.json({ success: false, error: "You have already generated a diet plan." }, { status: 403 });
+            if (!userRecord) return NextResponse.json({ success: false, error: "User not found" }, { status: 404 });
+
+            // Lazy Reset Logic
+            if (!userRecord.billingCycleEndsAt || Date.now() > userRecord.billingCycleEndsAt.getTime()) {
+                const newLimit = userRecord.tier === "BASIC" ? 50 : userRecord.tier === "ELITE" ? 1000 : 3;
+                await prisma.user.update({
+                    where: { email },
+                    data: {
+                        tokenBalance: newLimit,
+                        billingCycleEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // +30 days
+                    }
+                });
+            }
+
+            // Atomic token decrement lock
+            const updateCount = await prisma.user.updateMany({
+                where: { email, tokenBalance: { gte: 1 } },
+                data: { tokenBalance: { decrement: 1 } }
+            });
+
+            if (updateCount.count === 0) {
+                return NextResponse.json({ success: false, error: "Insufficient tokens. Please upgrade your plan." }, { status: 402 });
             }
         }
 
         const cacheBase = hashInput(body, "diet");
+        const cacheKey = `full:diet:${cacheBase}`;
 
-        const cachedFull = getCached(`full:diet:${cacheBase}`);
-        if (cachedFull) {
-            return new Response(cachedFull, {
+        const dbCache = await getPersistentCache(cacheKey);
+        if (dbCache) {
+            console.log(`[nvidia/diet] Global cache HIT: ${cacheKey}`);
+            return new Response(dbCache, {
                 headers: {
                     "Content-Type": "text/plain; charset=utf-8",
                     "Cache-Control": "no-cache",
@@ -87,21 +109,42 @@ export async function POST(req: Request) {
             });
         }
 
-        const raw = await callNvidia(buildPrompt(body));
-        const parsed = cleanAndParse(raw);
-
-        if (!parsed) {
-            throw new Error("Failed to parse NVIDIA response");
+        // --- DEDUPLICATION START ---
+        const hasLock = await acquireLock(cacheKey);
+        if (!hasLock) {
+            console.log(`[nvidia/diet] Request deduplicated! Waiting for cache: ${cacheKey}`);
+            const waitedCache = await waitForCache(cacheKey);
+            if (waitedCache) {
+                return new Response(waitedCache, {
+                    headers: {
+                        "Content-Type": "text/plain; charset=utf-8",
+                        "X-Model-Used": "cache",
+                    },
+                });
+            }
         }
 
-        const final = JSON.stringify({
-            type: "complete",
-            plan: parsed,
-            validation: { valid: true, missingMeals: [], incompleteMeals: [], mealCount: (parsed.meals || []).length },
-            integrity: { passed: true, issues: [] },
-        });
+        let final = "";
+        let parsed: any = null;
+        try {
+            const raw = await callNvidia(buildPrompt(body));
+            parsed = cleanAndParse(raw);
 
-        setCache(`full:diet:${cacheBase}`, final);
+            if (!parsed) {
+                throw new Error("Failed to parse NVIDIA response");
+            }
+
+            final = JSON.stringify({
+                type: "complete",
+                plan: parsed,
+                validation: { valid: true, missingMeals: [], incompleteMeals: [], mealCount: (parsed.meals || []).length },
+                integrity: { passed: true, issues: [] },
+            });
+
+            await setPersistentCache(cacheKey, "diet", final);
+        } finally {
+            await releaseLock(cacheKey);
+        }
 
         if (email) {
             try {
@@ -109,12 +152,19 @@ export async function POST(req: Request) {
                     prisma.user.update({
                         where: { email },
                         data: {
-                            hasUsedDiet: true,
                             height: parseFloat(body.height),
                             weight: parseFloat(body.weight),
                             age: parseInt(body.age),
                             gender: body.gender,
                             goal: body.goal
+                        }
+                    }),
+                    prisma.tokenTransaction.create({
+                        data: {
+                            user: { connect: { email } },
+                            amount: -1,
+                            type: "GENERATION",
+                            description: "Generated diet plan",
                         }
                     }),
                     prisma.generatedPlan.create({
@@ -142,6 +192,23 @@ export async function POST(req: Request) {
             },
         });
     } catch (error: unknown) {
+        if (req && req.headers) { /* No op, just to satisfy typescript on email scope if out of scope */ }
+        // Attempt to refund token if process failed
+        // For standard try/catch if session email was captured
+        let emailToRefund;
+        try {
+            const session = await auth();
+            emailToRefund = session?.user?.email;
+            if (emailToRefund) {
+                await prisma.user.update({
+                    where: { email: emailToRefund },
+                    data: { tokenBalance: { increment: 1 } }
+                });
+            }
+        } catch (e) {
+            // ignore refund error
+        }
+        
         const message = error instanceof Error ? error.message : "Something went wrong";
         console.error("[nvidia/diet]", message);
         return NextResponse.json({ success: false, error: message }, { status: 500 });

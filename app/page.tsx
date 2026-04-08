@@ -7,7 +7,8 @@ import { Form } from '@/components/FormShell';
 import { EmptyState } from '@/components/EmptyState';
 import { WorkoutOut } from '@/components/WorkoutOut';
 import { DietOut } from '@/components/DietOut';
-import { AuthModal } from '@/components/AuthModal';
+import { LandingPage } from '@/components/LandingPage';
+import { useSession } from 'next-auth/react';
 
 import { getSafeDiet, getSafeWorkout, calculateMetrics } from '@/lib/helpers';
 import { ProgressBar } from '@/components/ProgressBar';
@@ -22,6 +23,7 @@ export default function Home() {
   const [error, setError] = useState('');
   const [progress, setProgress] = useState<GenProgress | null>(null);
   const mounted = useMount();
+  const { data: session, status } = useSession();
 
   // ── Parse newline-delimited JSON events from stream ───────────────────────
 
@@ -241,10 +243,20 @@ export default function Home() {
   const has = wPlan || dPlan;
 
 
+  if (status === 'loading') {
+     return (
+       <div style={{ height: 'calc(100vh - 100px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+         <div style={{ width: 24, height: 24, borderTop: '2px solid var(--lime)', borderRight: '2px solid transparent', borderRadius: '50%', animation: 'spin-slow 1s linear infinite' }} />
+       </div>
+     );
+  }
+
+  if (!session) {
+     return <LandingPage />;
+  }
 
   return (
     <>
-      <AuthModal />
       <div className="ob-page" style={{ opacity: mounted ? 1 : 0, transition: 'opacity 0.5s ease' }}>
 
         {/* ── HERO STRIP — compact, above the fold ────────────────────── */}
@@ -253,21 +265,14 @@ export default function Home() {
           <div className="hero-strip-inner">
 
             {/* Eyebrow badge */}
-            <div className="hero-eyebrow">
-              <div style={{
-                width: 7, height: 7, borderRadius: '50%',
-                background: 'var(--lime)', boxShadow: '0 0 12px var(--lime)',
-                animation: 'ob-pulse-ring 2s ease-in-out infinite',
-              }} />
-              <span className="fitness-badge">
-                Your AI Fitness Trainer
-              </span>
+            <div className="hero-eyebrow" style={{ fontFamily: "'DM Mono', monospace", color: 'var(--lime)', letterSpacing: '0.1em', fontSize: 13, marginBottom: 12 }}>
+              :: SYSTEM // ONLINE
             </div>
 
             {/* Main headline */}
             <h1 className="hero-title">
               YOUR <span className="accent">OBSIDIAN</span><br />
-              FITNESS PROTOCOL
+              FITNESS PLAN
             </h1>
 
             {/* Sub text */}
@@ -281,12 +286,12 @@ export default function Home() {
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 10,
                 padding: '10px 20px',
-                background: 'var(--lime-dim)',
-                border: '1px solid var(--border-lime)',
+                background: 'var(--bg-3)',
+                border: '1px solid var(--border-hi)',
                 color: 'var(--lime)',
-                fontFamily: "'Barlow Condensed',sans-serif",
-                fontSize: 12, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase',
-                cursor: 'pointer', borderRadius: 3,
+                fontFamily: "'DM Mono', monospace",
+                fontSize: 12, letterSpacing: '0.1em',
+                cursor: 'pointer', borderRadius: 0,
                 transition: 'all 0.2s',
                 width: 'fit-content',
               }}
@@ -323,17 +328,13 @@ export default function Home() {
             {/* Panel header */}
             <div style={{ marginBottom: 20 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                <div style={{
-                  width: 6, height: 6, borderRadius: '50%',
-                  background: 'var(--lime)', boxShadow: '0 0 8px var(--lime)',
-                  animation: 'ob-pulse-dot 2.5s ease-in-out infinite',
-                }} />
+                <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 14, color: 'var(--lime)', overflow: 'hidden' }}>&gt;_</span>
                 <p style={{
-                  fontFamily: "'Barlow Condensed',sans-serif",
-                  fontSize: 11, fontWeight: 700, letterSpacing: '0.22em',
+                  fontFamily: "'DM Mono',monospace",
+                  fontSize: 11, letterSpacing: '0.1em',
                   color: 'var(--lime)', textTransform: 'uppercase',
                 }}>
-                  Your Profile
+                  [ DATA INPUT ]
                 </p>
               </div>
               <h2 style={{
@@ -344,7 +345,7 @@ export default function Home() {
                 CONFIGURE YOUR PLAN
               </h2>
               <p style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
-                Fill in your details across 3 quick steps to generate your personalized protocol.
+                Fill in your details across 3 quick steps to generate your personalized training plan.
               </p>
             </div>
 
@@ -392,12 +393,8 @@ export default function Home() {
                   </div>
                 ) : (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 14 }}>
-                    <div style={{
-                      width: 5, height: 5, borderRadius: '50%',
-                      background: 'var(--lime)', boxShadow: '0 0 6px var(--lime)',
-                    }} />
-                    <p className="section-label" style={{ color: 'var(--lime)', fontSize: 12, letterSpacing: '0.16em' }}>
-                      {active === 'workout' ? 'TRAINING PROTOCOL' : 'NUTRITION PROTOCOL'}
+                    <p className="section-label" style={{ color: 'var(--lime)', fontSize: 12, letterSpacing: '0.16em', fontFamily: "'DM Mono',monospace" }}>
+                      [ {active === 'workout' ? 'TRAINING PLAN' : 'NUTRITION PLAN'} ]
                     </p>
                   </div>
                 )

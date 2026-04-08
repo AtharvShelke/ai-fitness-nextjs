@@ -7,6 +7,12 @@ datasource db {
 }
 
 
+enum Tier {
+  FREE
+  BASIC
+  ELITE
+}
+
 model User {
   id            String    @id @default(cuid())
   name          String?
@@ -17,6 +23,7 @@ model User {
   sessions      Session[]
   plans         GeneratedPlan[]
   planHistory   PlanHistory[]
+  tokenLogs     TokenTransaction[]
 
   // ── Existing biometric/goal fields ──────────────────────────────
   height        Float?
@@ -25,9 +32,10 @@ model User {
   gender        String?
   goal          String?
 
-  // ── One-time generation guards (existing) ───────────────────────
-  hasUsedWorkout Boolean @default(false)
-  hasUsedDiet    Boolean @default(false)
+  // ── NEW: constraint / token system fields ───────────────────────
+  tier                 Tier      @default(FREE)
+  tokenBalance         Int       @default(3)
+  billingCycleEndsAt   DateTime?
 
   // ── NEW: extended profile fields (all optional for backward compat)
   targetWeight     Float?
@@ -112,5 +120,33 @@ model PlanHistory {
 
   @@unique([userId, versionNumber])
   @@index([userId, createdAt(sort: Desc)])
+  @@index([inputHash])
+}
+
+model TokenTransaction {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  amount      Int      
+  type        String   
+  description String?  
+  
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+// ── Persistent Global Cache for AI Generations ────────────────────────────────
+model GlobalGenerationCache {
+  id            String   @id @default(cuid())
+  inputHash     String   @unique  // SHA-256 hash of the exact sanitized inputs + plan type
+  planType      String   // "diet" | "workout"
+  aiResponse    String   // The full JSON string response to deliver
+  
+  hitCount      Int      @default(0)
+  createdAt     DateTime @default(now())
+  lastHitAt     DateTime @default(now())
+  
   @@index([inputHash])
 }

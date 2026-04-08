@@ -36,7 +36,7 @@ export function DashboardClient({ user, plans, userMetrics }: DashboardProps) {
             <span className="accent">{user.name?.toUpperCase() || 'TRAINER'}</span>
           </h1>
           <p className="hero-subtitle">
-            View your previously generated AI protocols below.
+            View your previously generated AI plans below.
           </p>
         </div>
       </div>
@@ -49,13 +49,13 @@ export function DashboardClient({ user, plans, userMetrics }: DashboardProps) {
                 className={`ob-tab${activeTab === 'workout' ? ' on' : ''}`}
                 onClick={() => setActiveTab('workout')}
               >
-                WORKOUT PROTOCOLS ({workoutPlans.length})
+                WORKOUT PLANS ({workoutPlans.length})
               </button>
               <button
                 className={`ob-tab${activeTab === 'diet' ? ' on' : ''}`}
                 onClick={() => setActiveTab('diet')}
               >
-                NUTRITION PROTOCOLS ({dietPlans.length})
+                NUTRITION PLANS ({dietPlans.length})
               </button>
             </div>
           </div>
@@ -70,7 +70,7 @@ export function DashboardClient({ user, plans, userMetrics }: DashboardProps) {
                 <div key={plan.id} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <h3 style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 24, color: 'var(--lime)', margin: 0, lineHeight: 1 }}>
-                      PROTOCOL #{activePlans.length - index}
+                      PLAN #{activePlans.length - index}
                     </h3>
                     <span style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: "'DM Mono',monospace" }}>
                       Generated on {new Date(plan.createdAt).toLocaleDateString()}

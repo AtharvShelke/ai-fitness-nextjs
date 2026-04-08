@@ -239,17 +239,18 @@ function getMuscleGroupRotation(days: number, goal?: string): string[] {
 
 async function generateWorkoutWithRetry(
     body: GenerationBody,
+    prompt: string,
     attempt = 1
 ): Promise<unknown> {
     const t0 = Date.now();
     try {
-        const raw = await callLLM(buildWorkoutPrompt(body));
+        const raw = await callLLM(prompt);
         const parsed = cleanAndParse(raw) as Record<string, unknown> | null;
         const dt = Date.now() - t0;
 
         if (!parsed || !Array.isArray(parsed.days) || (parsed.days as unknown[]).length < 7) {
             logGen({ type: "workout", unit: "full_plan", attempt, success: false, durationMs: dt, error: "incomplete_plan" });
-            if (attempt <= MAX_RETRIES) return generateWorkoutWithRetry(body, attempt + 1);
+            if (attempt <= MAX_RETRIES) return generateWorkoutWithRetry(body, prompt, attempt + 1);
             return null;
         }
 
@@ -261,7 +262,23 @@ async function generateWorkoutWithRetry(
 
         if (dupes.length > 2) {
             logGen({ type: "workout", unit: "full_plan", attempt, success: false, durationMs: dt, error: `exercise_duplication: ${dupes.slice(0, 3).join(",")}` });
-            if (attempt <= MAX_RETRIES) return generateWorkoutWithRetry(body, attempt + 1);
+            if (attempt <= MAX_RETRIES) {
+                const correctivePrompt = prompt + `\n\n[SYSTEM FEEDBACK]: Your last output contained duplicated exercises. You must use different exercises every day.`;
+                return generateWorkoutWithRetry(body, correctivePrompt, attempt + 1);
+            }
+            return null;
+        }
+        
+        // --- SEMANTIC EVALUATION LAYER ---
+        const integrity = integrityCheckWorkout(parsed);
+        if (!integrity.passed && integrity.criticalFailures.length > 0) {
+            logGen({ type: "workout", unit: "full_plan", attempt, success: false, durationMs: dt, error: `semantic_failure: ${integrity.criticalFailures.join(" | ")}` });
+            
+            if (attempt <= MAX_RETRIES) {
+                const correctivePrompt = prompt + `\n\n[SYSTEM FEEDBACK ON YOUR PREVIOUS ATTEMPT]:\nYour last submission failed strict safety evaluation for these reasons:\n${integrity.criticalFailures.map(f => "- " + f).join('\n')}\n\nYou must aggressively rewrite the plan to strictly adhere to the safety parameters.`;
+                return generateWorkoutWithRetry(body, correctivePrompt, attempt + 1);
+            }
+            return null;
         }
 
         logGen({ type: "workout", unit: "full_plan", attempt, success: true, durationMs: dt });
@@ -269,7 +286,7 @@ async function generateWorkoutWithRetry(
     } catch (err) {
         const dt = Date.now() - t0;
         logGen({ type: "workout", unit: "full_plan", attempt, success: false, durationMs: dt, error: (err as Error).message });
-        if (attempt <= MAX_RETRIES) return generateWorkoutWithRetry(body, attempt + 1);
+        if (attempt <= MAX_RETRIES) return generateWorkoutWithRetry(body, prompt, attempt + 1);
         return null;
     }
 }
@@ -284,7 +301,8 @@ export async function generateFullWorkout(
 
     if (onProgress) onProgress(0, 7, { day: "Generating..." });
 
-    const parsed = await generateWorkoutWithRetry(body) as Record<string, unknown> | null;
+    const initialPrompt = buildWorkoutPrompt(body);
+    const parsed = await generateWorkoutWithRetry(body, initialPrompt) as Record<string, unknown> | null;
 
     if (!parsed) {
         const fallbackPlan = {
@@ -469,17 +487,18 @@ Return ONLY valid JSON, no markdown, no explanation:
 
 async function generateDietWithRetry(
     body: GenerationBody,
+    prompt: string,
     attempt = 1
 ): Promise<unknown> {
     const t0 = Date.now();
     try {
-        const raw = await callLLM(buildDietPrompt(body));
+        const raw = await callLLM(prompt);
         const parsed = cleanAndParse(raw) as Record<string, unknown> | null;
         const dt = Date.now() - t0;
 
         if (!parsed || !Array.isArray(parsed.meals) || (parsed.meals as unknown[]).length === 0) {
             logGen({ type: "diet", unit: "full_plan", attempt, success: false, durationMs: dt, error: "no_meals" });
-            if (attempt <= MAX_RETRIES) return generateDietWithRetry(body, attempt + 1);
+            if (attempt <= MAX_RETRIES) return generateDietWithRetry(body, prompt, attempt + 1);
             return null;
         }
 
@@ -488,7 +507,27 @@ async function generateDietWithRetry(
 
         if (dupes.length > 0) {
             logGen({ type: "diet", unit: "full_plan", attempt, success: false, durationMs: dt, error: `meal_duplication: ${dupes.join(",")}` });
-            if (attempt <= MAX_RETRIES) return generateDietWithRetry(body, attempt + 1);
+            if (attempt <= MAX_RETRIES) {
+                const correctivePrompt = prompt + `\n\n[SYSTEM FEEDBACK]: Your last output duplicated the names of meals. All meals must have unique dish names.`;
+                return generateDietWithRetry(body, correctivePrompt, attempt + 1);
+            }
+            return null;
+        }
+        
+        // --- SEMANTIC EVALUATION LAYER ---
+        const userTargetCals = Number(body.dailyCalories) || Number(body.recommendedCalories) || 0;
+        // Only run strict calorie check if a target calculation was passed
+        if (userTargetCals > 0) {
+             const integrity = integrityCheckDiet(parsed, userTargetCals);
+             if (!integrity.passed && integrity.criticalFailures.length > 0) {
+                 logGen({ type: "diet", unit: "full_plan", attempt, success: false, durationMs: dt, error: `semantic_failure: ${integrity.criticalFailures.join(" | ")}` });
+                 
+                 if (attempt <= MAX_RETRIES) {
+                     const correctivePrompt = prompt + `\n\n[SYSTEM FEEDBACK ON YOUR PREVIOUS ATTEMPT]:\nYour last submission mathematically failed evaluation for the following reasons:\n${integrity.criticalFailures.map(f => "- " + f).join('\n')}\n\nAdjust your portion sizes, ingredient quantities, and calculations to strictly resolve these issues.`;
+                     return generateDietWithRetry(body, correctivePrompt, attempt + 1);
+                 }
+                 return null;
+             }
         }
 
         logGen({ type: "diet", unit: "full_plan", attempt, success: true, durationMs: dt });
@@ -496,7 +535,7 @@ async function generateDietWithRetry(
     } catch (err) {
         const dt = Date.now() - t0;
         logGen({ type: "diet", unit: "full_plan", attempt, success: false, durationMs: dt, error: (err as Error).message });
-        if (attempt <= MAX_RETRIES) return generateDietWithRetry(body, attempt + 1);
+        if (attempt <= MAX_RETRIES) return generateDietWithRetry(body, prompt, attempt + 1);
         return null;
     }
 }
@@ -509,7 +548,8 @@ export async function generateFullDiet(
 ): Promise<{ plan: unknown; validation: DietValidation; integrity: unknown; logs: GenerationLog[] }> {
     if (onProgress) onProgress(0, mealSlots.length, { meal: "Generating..." });
 
-    const parsed = await generateDietWithRetry(body) as Record<string, unknown> | null;
+    const initialPrompt = buildDietPrompt(body);
+    const parsed = await generateDietWithRetry(body, initialPrompt) as Record<string, unknown> | null;
 
     if (!parsed) {
         const fallbackPlan = {
@@ -586,7 +626,8 @@ export async function recoverWorkoutDays(
     missingDays: string[],
     cacheBase: string
 ): Promise<unknown[]> {
-    const result = await generateWorkoutWithRetry(body) as Record<string, unknown> | null;
+    const prompt = buildWorkoutPrompt(body);
+    const result = await generateWorkoutWithRetry(body, prompt) as Record<string, unknown> | null;
     if (!result) return missingDays.map(day => fallbackDay(day, "training"));
 
     return missingDays.map(day => {
@@ -602,7 +643,8 @@ export async function recoverDietMeals(
     missingMeals: string[],
     cacheBase: string
 ): Promise<unknown[]> {
-    const result = await generateDietWithRetry(body) as Record<string, unknown> | null;
+    const prompt = buildDietPrompt(body);
+    const result = await generateDietWithRetry(body, prompt) as Record<string, unknown> | null;
     if (!result) {
         const totalCals = Number(body.dailyCalories) || 2000;
         return missingMeals.map(slot => fallbackMeal(slot, Math.round(totalCals / missingMeals.length)));

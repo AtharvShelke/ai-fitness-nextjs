@@ -89,14 +89,16 @@ export function validateDiet(parsed: any, mealFrequency?: string): DietValidatio
 export interface IntegrityResult {
     passed: boolean;
     issues: string[];
+    criticalFailures: string[]; // Strict semantic rules that force LLM auto-correction
 }
 
-export function integrityCheckWorkout(parsed: any): IntegrityResult {
+export function integrityCheckWorkout(parsed: any, maxSetsPerDay: number = 30): IntegrityResult {
     const issues: string[] = [];
+    const criticalFailures: string[] = [];
     const days = parsed.days || parsed.weeklySchedule || [];
 
     if (days.length < 7) {
-        issues.push(`Only ${days.length}/7 days present`);
+        criticalFailures.push(`Only ${days.length}/7 days present. All 7 days must be generated.`);
     }
 
     for (const day of days) {
@@ -104,32 +106,59 @@ export function integrityCheckWorkout(parsed: any): IntegrityResult {
             if (!day.exercises || day.exercises.length === 0) {
                 issues.push(`${day.day}: training day with no exercises`);
             }
+            
+            let totalSets = 0;
             for (const ex of (day.exercises || [])) {
                 if (!ex.name) issues.push(`${day.day}: exercise missing name`);
                 if (!ex.sets || ex.sets <= 0) issues.push(`${day.day}: ${ex.name || "?"} missing sets`);
+                totalSets += (Number(ex.sets) || 0);
             }
+            
+            if (totalSets > maxSetsPerDay) {
+                criticalFailures.push(`${day.day}: Excessive volume. Total sets (${totalSets}) exceeds safety limit (${maxSetsPerDay}). Reduce number of exercises or sets.`);
+            }
+
             if (!day.mins && !day.durationMinutes) {
                 issues.push(`${day.day}: missing duration`);
             }
         }
     }
 
-    return { passed: issues.length === 0, issues };
+    return { passed: criticalFailures.length === 0 && issues.length === 0, issues, criticalFailures };
 }
 
-export function integrityCheckDiet(parsed: any): IntegrityResult {
+export function integrityCheckDiet(parsed: any, targetCals?: number): IntegrityResult {
     const issues: string[] = [];
+    const criticalFailures: string[] = [];
     const meals = parsed.meals || [];
 
     if (meals.length < 3) {
-        issues.push(`Only ${meals.length} meals (expected 3+)`);
+        criticalFailures.push(`Only ${meals.length} meals generated (expected 3+).`);
     }
+
+    let calculatedTotalCals = 0;
 
     for (const m of meals) {
         if (!m.name) issues.push(`${m.meal || "?"}: missing dish name`);
-        if (!m.calories || m.calories <= 0) issues.push(`${m.meal || "?"}: missing calories`);
+        if (!m.calories || m.calories <= 0) {
+            issues.push(`${m.meal || "?"}: missing calories`);
+        } else {
+            calculatedTotalCals += (Number(m.calories) || 0);
+        }
+        
         if (!m.ingredients || m.ingredients.length === 0) {
             issues.push(`${m.meal || "?"}: missing ingredients`);
+        }
+    }
+
+    if (targetCals) {
+        const upperLimit = targetCals * 1.15; // 15% variance
+        const lowerLimit = targetCals * 0.85;
+        
+        if (calculatedTotalCals > upperLimit) {
+            criticalFailures.push(`Total calories (${calculatedTotalCals} kcal) drastically exceeds user target (${targetCals} kcal). You MUST reduce portion sizes or remove high-calorie items.`);
+        } else if (calculatedTotalCals < lowerLimit) {
+            criticalFailures.push(`Total calories (${calculatedTotalCals} kcal) falls severely short of user target (${targetCals} kcal). You MUST increase portions or add calorie-dense foods.`);
         }
     }
 
@@ -137,7 +166,7 @@ export function integrityCheckDiet(parsed: any): IntegrityResult {
     if (!parsed.carbs && !parsed.summary?.carbs) issues.push("Missing macro: carbs");
     if (!parsed.fats && !parsed.summary?.fats) issues.push("Missing macro: fats");
 
-    return { passed: issues.length === 0, issues };
+    return { passed: criticalFailures.length === 0 && issues.length === 0, issues, criticalFailures };
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
